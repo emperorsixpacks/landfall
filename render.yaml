@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: landfall
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: QLOO_API_KEY
+        sync: false
+      - key: QLOO_BASE_URL
+        value: https://hackathon.api.qloo.com
+      - key: QLOO_MODE
+        value: live
+      - key: QLOO_RATE_LIMIT
+        value: "0.1"
+      - key: LLM_BASE_URL
+        sync: false
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        sync: false
+      - key: YOUTUBE_AUDIENCE_ENABLED
+        value: "false"
