@@ -1,0 +1,44 @@
+{
+  "note": "Bundled YouTube Music fallback (public info only, not Qloo data). Used only if the live ytmusicapi lookup is blocked from the host.",
+  "artists": [
+    {
+      "name": "Burna Boy",
+      "browse_id": "UCQ0edGtBKN6qFf0F0-xxxx",
+      "description": "Nigerian singer, songwriter and record producer from Port Harcourt, Nigeria.",
+      "top_songs": [
+        {"title": "Last Last", "video_id": "sample", "views": null},
+        {"title": "On the Low", "video_id": "sample", "views": null},
+        {"title": "Ye", "video_id": "sample", "views": null},
+        {"title": "Kilometre", "video_id": "sample", "views": null},
+        {"title": "Common Person", "video_id": "sample", "views": null}
+      ],
+      "related": ["Wizkid", "Davido", "Rema", "Asake", "Fireboy DML", "Tems", "Ayra Starr"]
+    },
+    {
+      "name": "Tems",
+      "browse_id": "UCt1e2aA3s4k5v6w7x8y9-zzzz",
+      "description": "Nigerian singer, songwriter and record producer from Lagos, Nigeria.",
+      "top_songs": [
+        {"title": "Free Mind", "video_id": "sample", "views": null},
+        {"title": "Higher", "video_id": "sample", "views": null},
+        {"title": "Try Me", "video_id": "sample", "views": null},
+        {"title": "Damages", "video_id": "sample", "views": null},
+        {"title": "Crazy Tings", "video_id": "sample", "views": null}
+      ],
+      "related": ["Wizkid", "Burna Boy", "Ayra Starr", "Ckay", "Rema"]
+    },
+    {
+      "name": "Rema",
+      "browse_id": "UC2b3c4d5e6f7g8h9i0j1-kkkk",
+      "description": "Nigerian singer, songwriter and rapper from Benin City, Nigeria.",
+      "top_songs": [
+        {"title": "Calm Down", "video_id": "sample", "views": null},
+        {"title": "Dumebi", "video_id": "sample", "views": null},
+        {"title": "Iron Man", "video_id": "sample", "views": null},
+        {"title": "Soundgasm", "video_id": "sample", "views": null},
+        {"title": "Charm", "video_id": "sample", "views": null}
+      ],
+      "related": ["Burna Boy", "Asake", "Ayra Starr", "BNXN", "Tems"]
+    }
+  ]
+}
