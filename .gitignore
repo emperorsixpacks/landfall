@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# Cache & runtime
+.cache/
+cache/
+uploads/
+clips/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# Local audio samples (users drop their own)
+samples/*.mp3
+samples/*.wav
+samples/*.m4a
+!samples/.gitkeep
