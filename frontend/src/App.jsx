@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Home from "./components/Home.jsx";
 import RunTimeline from "./components/RunTimeline.jsx";
 import Results from "./components/Results.jsx";
@@ -12,6 +12,7 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
+  const abortRef = useRef(null);
 
   useEffect(() => {
     fetch("/api/config").then((r) => r.json()).then(setConfig).catch(() => {});
@@ -25,23 +26,28 @@ export default function App() {
     setResult(null);
     setError(null);
 
-    const res = await fetch("/api/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.body) {
-      setError("No response stream");
-      setView("home");
-      return;
-    }
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     try {
+      const res = await fetch("/api/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      if (!res.body) {
+        setError("No response stream");
+        setView("home");
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -68,9 +74,18 @@ export default function App() {
         }
       }
     } catch (e) {
+      if (controller.signal.aborted) {
+        setView("home");
+        return;
+      }
       setError(String(e));
     }
     setView("results");
+  }
+
+  function cancelRun() {
+    abortRef.current?.abort();
+    setView("home");
   }
 
   const isMock = config.mode === "mock";
@@ -82,10 +97,10 @@ export default function App() {
         <div className="mx-auto max-w-[1040px] px-6 flex items-center justify-between">
           <button
             onClick={() => setView("home")}
-            className="flex items-baseline gap-2.5 text-left focus:outline-none focus:ring-1 focus:ring-accent rounded-sm"
+            className="flex items-center gap-2.5 text-left focus:outline-none focus:ring-1 focus:ring-accent rounded-sm"
+            aria-label="Landfall home"
           >
-            <span className="text-lg font-semibold tracking-tight text-text">Landfall</span>
-            <span className="text-xs text-[#9AA0AC]">agentic release planner</span>
+            <img src="/landfall-lockup-dark.svg" alt="Landfall" className="h-7 w-auto" />
           </button>
 
           <div className="flex items-center gap-5 text-xs">
@@ -132,7 +147,7 @@ export default function App() {
           <Home config={config} allCities={cities} onRun={run} onError={setError} />
         )}
         {view === "running" && (
-          <RunTimeline events={events} cities={cities} liveMarkets={liveMarkets} />
+          <RunTimeline events={events} cities={cities} liveMarkets={liveMarkets} onCancel={cancelRun} />
         )}
         {view === "results" && (
           <Results
