@@ -282,11 +282,13 @@ def heatmap(entity_id: str, city: str) -> dict:
 # --- helpers -----------------------------------------------------------------
 def _entity(raw: dict) -> dict:
     props = raw.get("properties") or {}
+    types = raw.get("types") or []
+    subtype = raw.get("subtype") or raw.get("type") or (types[0] if types else None)
     return {
         "id": raw.get("entity_id"),
         "name": raw.get("name"),
-        "type": raw.get("type"),
-        "subtype": raw.get("subtype") or raw.get("type"),
+        "type": raw.get("type") or (types[0] if types else None),
+        "subtype": subtype,
         "popularity": raw.get("popularity"),
         "score": _score(raw),
         "description": props.get("description") or props.get("short_description"),
