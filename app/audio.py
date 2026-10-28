@@ -117,7 +117,7 @@ def _analyze_file(src: Path) -> dict:
 
 def _tempo(y, sr, librosa):
     tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
-    t = float(tempo)
+    t = float(tempo.item()) if hasattr(tempo, "item") else float(tempo)
     if t < 60:
         t *= 2
     elif t > 200:
