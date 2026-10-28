@@ -156,10 +156,18 @@ def search_artists(query: str, limit: int = 8) -> list[dict]:
     results = []
     seen: set[str] = set()
 
-    def add(name):
-        if name and name.lower() not in seen:
-            seen.add(name.lower())
-            results.append({"name": name, "type": "Artist"})
+    def add(name, image=None):
+        if not name:
+            return
+        key = name.lower()
+        if key in seen:
+            if image:
+                for r in results:
+                    if r["name"].lower() == key:
+                        r["image"] = image
+            return
+        seen.add(key)
+        results.append({"name": name, "type": "Artist", "image": image})
 
     # YouTube Music first — no token, instant.
     try:
@@ -170,12 +178,12 @@ def search_artists(query: str, limit: int = 8) -> list[dict]:
     except Exception:  # noqa: BLE001
         pass
 
-    # Spotify enrichment (deduped).
+    # Spotify enrichment (deduped, with image).
     try:
         from . import spotify
 
         for a in spotify.search_artists(query, limit):
-            add(a.get("name"))
+            add(a.get("name"), a.get("image"))
     except Exception:  # noqa: BLE001
         pass
 

@@ -70,7 +70,13 @@ def search_artists(query: str, limit: int = 8) -> list[dict]:
     d = _get("/search", {"q": query, "type": "artist", "limit": limit})
     if not d:
         return []
-    return [{"name": a.get("name"), "id": a.get("id")} for a in d.get("artists", {}).get("items", []) if a.get("name")]
+    out = []
+    for a in d.get("artists", {}).get("items", []):
+        if not a.get("name"):
+            continue
+        imgs = a.get("images") or []
+        out.append({"name": a["name"], "id": a.get("id"), "image": imgs[0].get("url") if imgs else None})
+    return out
 
 
 def get_artist(artist_id: str) -> dict | None:

@@ -18,6 +18,7 @@ export default function Home({ config, allCities = [], onRun, onError }) {
   const [debouncedArtistQuery, setDebouncedArtistQuery] = useState("");
   const [resolvedArtist, setResolvedArtist] = useState(null);
   const [showArtistDropdown, setShowArtistDropdown] = useState(false);
+  const [showArtistModal, setShowArtistModal] = useState(false);
   const [artistMatches, setArtistMatches] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const artistInputRef = useRef(null);
@@ -202,19 +203,13 @@ export default function Home({ config, allCities = [], onRun, onError }) {
                 <button onClick={changeArtist} className="text-small text-muted hover:text-text">Change</button>
               </div>
             ) : (
-              <div className="relative">
-                <input
-                  ref={artistInputRef}
-                  value={artistQuery}
-                  onChange={(e) => { setArtistQuery(e.target.value); setShowArtistDropdown(true); }}
-                  onFocus={() => { if (artistQuery.trim()) setShowArtistDropdown(true); }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && artistMatches.length > 0) { e.preventDefault(); selectArtist(artistMatches[0].name); }
-                    else if (e.key === "Escape") setShowArtistDropdown(false);
-                  }}
-                  placeholder="Search an artist…"
-                  className="h-12 w-full rounded-control border border-border bg-raised px-4 text-body text-text placeholder:text-muted outline-none focus:border-accent"
-                />
+              <div>
+                <button
+                  onClick={() => setShowArtistModal(true)}
+                  className="flex h-12 w-full items-center rounded-control border border-border bg-raised px-4 text-body text-muted hover:border-accent"
+                >
+                  Search an artist…
+                </button>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {(config.sample_artists || []).slice(0, 3).map((a) => (
                     <button key={a} onClick={() => selectArtist(a)} className="rounded-pill border border-border px-3 py-1 text-small text-muted hover:border-accent hover:text-text">
@@ -222,22 +217,6 @@ export default function Home({ config, allCities = [], onRun, onError }) {
                     </button>
                   ))}
                 </div>
-                {showArtistDropdown && debouncedArtistQuery && (
-                  <div className="absolute left-0 right-0 top-[52px] z-30 max-h-56 overflow-y-auto rounded-control border border-border bg-panel divide-y divide-border" style={reduced ? undefined : { animation: "fade-up 160ms var(--ease-out)" }}>
-                    {isSearching ? (
-                      <div className="px-4 py-3 text-small text-muted">Searching…</div>
-                    ) : artistMatches.length > 0 ? (
-                      artistMatches.map((m) => (
-                        <button key={m.name} type="button" onClick={() => selectArtist(m.name)} className="flex w-full items-center justify-between px-4 py-2.5 text-left text-body hover:bg-raised">
-                          <span className="text-text">{m.name}</span>
-                          <span className="text-small text-muted">{m.type}</span>
-                        </button>
-                      ))
-                    ) : (
-                      <div className="px-4 py-3 text-small text-muted">No match found. Try another spelling.</div>
-                    )}
-                  </div>
-                )}
               </div>
             )}
           </FormSection>
@@ -340,6 +319,74 @@ export default function Home({ config, allCities = [], onRun, onError }) {
 
       <HowItWorks reduced={reduced} />
       <WhyQloo />
+
+      {showArtistModal && (
+        <ArtistSearchModal
+          query={artistQuery}
+          setQuery={setArtistQuery}
+          matches={artistMatches}
+          isSearching={isSearching}
+          reduced={reduced}
+          inputRef={artistInputRef}
+          onSelect={(name) => { selectArtist(name); setShowArtistModal(false); }}
+          onClose={() => setShowArtistModal(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function ArtistSearchModal({ query, setQuery, matches, isSearching, reduced, inputRef, onSelect, onClose }) {
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 p-4 pt-24" onClick={onClose}>
+      <div
+        className="w-full max-w-md rounded-card border border-border bg-panel shadow-elevation"
+        onClick={(e) => e.stopPropagation()}
+        style={reduced ? undefined : { animation: "fade-up 200ms var(--ease-out)" }}
+      >
+        <div className="border-b border-border p-4">
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && matches.length > 0) { e.preventDefault(); onSelect(matches[0].name); }
+            }}
+            placeholder="Search an artist…"
+            autoFocus
+            className="h-12 w-full rounded-control border border-border bg-raised px-4 text-body text-text placeholder:text-muted outline-none focus:border-accent"
+          />
+        </div>
+        <div className="max-h-80 overflow-y-auto divide-y divide-border">
+          {isSearching ? (
+            <div className="px-4 py-3 text-small text-muted">Searching…</div>
+          ) : matches.length > 0 ? (
+            matches.map((m) => (
+              <button key={m.name} type="button" onClick={() => onSelect(m.name)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-raised">
+                {m.image ? (
+                  <img src={m.image} alt="" className="h-10 w-10 shrink-0 rounded-full border border-border object-cover" />
+                ) : (
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-raised text-muted">♪</span>
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-body text-text">{m.name}</span>
+                  <span className="text-small text-muted">{m.type}</span>
+                </span>
+              </button>
+            ))
+          ) : (
+            <div className="px-4 py-3 text-small text-muted">No match found. Try another spelling.</div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
