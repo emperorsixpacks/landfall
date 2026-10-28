@@ -179,6 +179,12 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
         hexPolygonMargin={0.68}
         hexPolygonColor={() => COLORS.land}
         hexPolygonAltitude={0.003}
+        polygonsData={LAND}
+        polygonCapColor={() => "rgba(0,0,0,0)"}
+        polygonSideColor={() => "rgba(0,0,0,0)"}
+        polygonStrokeColor={() => "#4A5568"}
+        polygonAltitude={0.01}
+        polygonCapCurvatureResolution={2}
         pointsData={scoredPoints}
         pointLat={(d) => d.lat}
         pointLng={(d) => d.lng}

@@ -864,17 +864,17 @@ function BaselineComparison({ baseline, main }) {
     <section className="rounded-card border border-danger/40 bg-panel p-5 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <h2 className="text-label text-danger">Plain LLM (no Qloo)</h2>
-          <span className="rounded-pill border border-danger/40 px-2 py-0.5 text-label text-danger">guesses only</span>
+          <h2 className="text-label text-muted">LLM only (no agent)</h2>
+          <span className="rounded-pill border border-border px-2 py-0.5 text-label text-muted">no code scoring</span>
         </div>
         <span className="num text-muted">
-          claims {baseline.fit_score ?? "—"}/100 · Qloo measured {main.fit_score ?? "—"}/100
+          self-reported {baseline.fit_score ?? "—"}/100 · agent scored {main.fit_score ?? "—"}/100
         </span>
       </div>
 
       <p className="text-small text-secondary">
-        Without Qloo taste data, a plain LLM invents confident numbers. Qloo measures real
-        affinity — which is why these scores differ. The plan below is not grounded in any data.
+        The LLM gets the same Qloo taste data, but none of the agent's structured analysis or
+        code scoring — its numbers are self-reported; the agent's are computed from Qloo data.
       </p>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
