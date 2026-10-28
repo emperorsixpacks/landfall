@@ -104,3 +104,24 @@ def bundled_artists() -> list[str]:
     if not data:
         return []
     return [a.get("name") for a in data.get("artists", []) if a.get("name")]
+
+
+def search_artists(query: str, limit: int = 8) -> list[dict]:
+    """Live artist autocomplete via YouTube Music search (unofficial)."""
+    if not query or not query.strip():
+        return []
+    try:
+        from ytmusicapi import YTMusic
+
+        yt = YTMusic()
+        results = yt.search(query, filter="artists") or []
+        out = []
+        for r in results:
+            name = r.get("artist") or r.get("name")
+            if name:
+                out.append({"name": name, "type": "Artist"})
+            if len(out) >= limit:
+                break
+        return out
+    except Exception:  # noqa: BLE001
+        return []

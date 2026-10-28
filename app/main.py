@@ -81,6 +81,11 @@ def get_cities():
     return cities_mod.load_cities()
 
 
+@app.get("/api/artists/search")
+def search_artists(q: str = ""):
+    return lookup.search_artists(q)
+
+
 @app.get("/api/config")
 def get_config():
     return {

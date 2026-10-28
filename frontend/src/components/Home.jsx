@@ -2,34 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import GlobeContainer from "./GlobeContainer.jsx";
 import { formatTime, joinMarketsToCities, prefersReducedMotion } from "../lib/globeUtils";
 
-const ARTIST_DIRECTORY = [
-  { name: "Tems", type: "Artist · Contemporary R&B / Afrobeats" },
-  { name: "Burna Boy", type: "Artist · Afro-fusion / Reggae" },
-  { name: "Rema", type: "Artist · Afrorave / Pop" },
-  { name: "Asake", type: "Artist · Amapiano / Fuji" },
-  { name: "Ayra Starr", type: "Artist · Afropop / R&B" },
-  { name: "Wizkid", type: "Artist · Afrobeats" },
-  { name: "Davido", type: "Artist · Afrobeats / Pop" },
-  { name: "Omah Lay", type: "Artist · Afro-fusion" },
-  { name: "Fireboy DML", type: "Artist · Afro-R&B" },
-  { name: "Tiwa Savage", type: "Artist · Afropop" },
-  { name: "Central Cee", type: "Artist · UK Drill / Hip-Hop" },
-  { name: "Drake", type: "Artist · Hip-Hop / R&B" },
-  { name: "Kendrick Lamar", type: "Artist · Hip-Hop" },
-  { name: "Billie Eilish", type: "Artist · Alt-Pop" },
-  { name: "SZA", type: "Artist · Contemporary R&B" },
-  { name: "The Weeknd", type: "Artist · Synth-pop / R&B" },
-  { name: "Beyoncé", type: "Artist · Pop / R&B" },
-  { name: "Taylor Swift", type: "Artist · Pop / Folk" },
-  { name: "Bad Bunny", type: "Artist · Reggaeton / Latin Trap" },
-  { name: "Rosalía", type: "Artist · Flamenco Pop" },
-  { name: "CKay", type: "Artist · Emo-Afrobeats" },
-  { name: "Victony", type: "Artist · Afropop" },
-  { name: "Ruger", type: "Artist · Dancehall / Afrobeats" },
-  { name: "Black Sherif", type: "Artist · Highlife / Drill" },
-  { name: "Adekunle Gold", type: "Artist · Afro-pop / Highlife" },
-];
-
 const PRESETS = [
   { label: "Global", cities: ["Lagos", "London", "New York", "Paris", "Tokyo", "Johannesburg", "Los Angeles", "Accra"] },
   { label: "West Africa", cities: ["Lagos", "Abuja", "Accra", "Dakar", "Abidjan", "Port Harcourt", "Benin City"] },
@@ -73,21 +45,27 @@ export default function Home({ config, allCities = [], onRun, onError }) {
     return () => clearTimeout(handler);
   }, [artistQuery]);
 
-  // Combined artist catalog
-  const artistList = useMemo(() => {
-    const names = new Set(ARTIST_DIRECTORY.map((a) => a.name.toLowerCase()));
-    const extra = (config.sample_artists || [])
-      .filter((name) => !names.has(name.toLowerCase()))
-      .map((name) => ({ name, type: "Artist" }));
-    return [...ARTIST_DIRECTORY, ...extra];
-  }, [config.sample_artists]);
+  // Live artist search (YouTube Music), debounced — no hardcoded directory.
+  const [artistMatches, setArtistMatches] = useState([]);
 
-  // Filtered artist matches
-  const artistMatches = useMemo(() => {
-    if (!debouncedArtistQuery) return [];
-    const q = debouncedArtistQuery.toLowerCase();
-    return artistList.filter((a) => a.name.toLowerCase().includes(q));
-  }, [artistList, debouncedArtistQuery]);
+  useEffect(() => {
+    let cancelled = false;
+    if (!debouncedArtistQuery) {
+      setArtistMatches([]);
+      return;
+    }
+    fetch(`/api/artists/search?q=${encodeURIComponent(debouncedArtistQuery)}`)
+      .then((r) => r.json())
+      .then((list) => {
+        if (!cancelled) setArtistMatches(list || []);
+      })
+      .catch(() => {
+        if (!cancelled) setArtistMatches([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedArtistQuery]);
 
   // Handle artist selection
   function handleSelectArtist(name) {
