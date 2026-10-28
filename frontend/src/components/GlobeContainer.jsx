@@ -12,8 +12,9 @@ class GlobeErrorBoundary extends Component {
   static getDerivedStateFromError() {
     return { failed: true };
   }
-  componentDidCatch() {
-    this.props.onError?.();
+  componentDidCatch(error, info) {
+    console.error("Globe render failed, falling back to 2D view:", error, info);
+    this.props.onError?.(error);
   }
   render() {
     if (this.state.failed) return <GlobeFallback {...this.props} />;

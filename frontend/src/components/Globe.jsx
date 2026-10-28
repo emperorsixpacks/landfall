@@ -1,15 +1,19 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import Globe from "react-globe.gl";
+import { MeshPhongMaterial } from "three";
 import { feature } from "topojson-client";
 import countries from "world-atlas/countries-110m.json";
 import {
   COLORS,
   prefersReducedMotion,
   rankMarkets,
+  sanitizeLandFeatures,
   scoreToColor,
 } from "../lib/globeUtils";
 
-const LAND = feature(countries, countries.objects.countries).features;
+const LAND = sanitizeLandFeatures(
+  feature(countries, countries.objects.countries).features
+);
 
 // forwardRef exposes: flyToCity(m), resetView(), saveImage(), startTour()
 const LandfallGlobe = forwardRef(function LandfallGlobe(
@@ -30,7 +34,12 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
 ) {
   const globeEl = useRef(null);
   const wrapRef = useRef(null);
-  const [dims, setDims] = useState({ width: 800, height: Math.max(height, 420) });
+  const dimsState = useState({ width: 800, height: Math.max(height, 420) });
+  const [dims, setDims] = dimsState;
+  const globeMaterial = useMemo(
+    () => new MeshPhongMaterial({ color: COLORS.base }),
+    []
+  );
 
   // Size the canvas to its container, min height 420.
   useEffect(() => {
@@ -54,7 +63,8 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
   useEffect(() => {
     const g = globeEl.current;
     if (!g || !interactive) return;
-    const controls = g.controls();
+    const controls = g.controls?.();
+    if (!controls) return;
     if (reduced) {
       controls.autoRotate = false;
       return;
@@ -73,7 +83,8 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
     if (!g) return;
     let cancelled = false;
     const cancel = () => (cancelled = true);
-    const el = g.renderer().domElement;
+    const el = g.renderer?.()?.domElement;
+    if (!el) return;
     el.addEventListener("pointerdown", cancel);
     el.addEventListener("wheel", cancel);
     const tour = async () => {
@@ -86,7 +97,11 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
       if (!cancelled) g.pointOfView({ lat: 15, lng: 0, altitude: 2.5 }, 1200);
     };
     tour();
-    return () => el.removeEventListener("pointerdown", cancel);
+    return () => {
+      cancelled = true;
+      el.removeEventListener("pointerdown", cancel);
+      el.removeEventListener("wheel", cancel);
+    };
   }, [interactive, reduced, top3.length]);
 
   useImperativeHandle(ref, () => ({
@@ -150,7 +165,7 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
         width={dims.width}
         height={dims.height}
       backgroundColor="rgba(0,0,0,0)"
-      globeMaterial={{ color: COLORS.base }}
+      globeMaterial={globeMaterial}
       atmosphereColor="#5B9DFF"
       atmosphereAltitude={0.12}
       hexPolygonsData={LAND}

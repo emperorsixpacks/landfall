@@ -43,6 +43,7 @@ garnish.
 |------|--------------|--------|
 | `find_artist(query)` | artist name, top songs, related artists | YouTube Music (`ytmusicapi`, unofficial, no login), 24h disk cache + bundled fallback |
 | `find_home_city(artist, description)` | determine the artist's origin city (globe arcs) from the YT description against `cities.json` | LLM + our city list |
+| `sound_to_tags(features)` | map audio features to resolved Qloo tags (bridge) | `GET /v2/tags` + `config/bridge_rules.yaml` |
 | `qloo_search(name, type)` | resolve a name to a Qloo entity (fuzzy auto-select ≥ 90) | `GET /search` |
 | `qloo_insights(type, signals, filters, limit)` | ranked recommendations from taste signals | `GET /v2/insights` |
 | `qloo_audience(...)` | audience taste profile (tags + demographics) | `/entities` tags + best-effort `urn:demographics` |
@@ -93,16 +94,33 @@ and animated arcs.
 ## The fit score (code, never the LLM)
 
 ```
-fit = 0.40 * catalog_similarity + 0.40 * audience_affinity + 0.20 * hook_strength
+fit = 0.5 * catalog_match + 0.5 * audience_match
 ```
 
-- `catalog_similarity`: Jaccard overlap of the comparables' Qloo tags vs. the
-  artist's catalog tags.
-- `audience_affinity`: mean Qloo affinity of the comparables against the audience.
-- `hook_strength`: the top hook window's score from audio analysis.
+- `catalog_match`: Jaccard overlap of the comparables' Qloo tags vs. the artist's
+  catalog profile.
+- `audience_match`: Jaccard overlap of the comparables' Qloo tags vs. the audience
+  profile (artist + related artists).
+- `clip_strength`: the top hook window's score from audio analysis — reported
+  separately, not folded into the fit.
 
-Missing components are renormalized and flagged ("hook strength unavailable"), and a
-plain-English explanation is built from templates. Weights live in `app/config.py`.
+Missing components are renormalized and flagged, and a plain-English explanation is
+built from templates. Weights live in `app/scoring.py`.
+
+## Sound-to-taste bridge
+
+`app/bridge.py` + `config/bridge_rules.yaml` map numeric audio features (tempo, key,
+energy, brightness, onset density) to search terms, resolve each through
+`GET /v2/tags` (best fuzzy match only, ratio ≥ 85, unresolved terms dropped, no
+invented tag ids), and feed the resolved tag ids back as `signal.interests.tags` in
+the artist-comparables call and `filter.tags` in the venues call. The trace is shown
+in the "Sound to taste" panel.
+
+## Plain-LLM baseline
+
+`POST /api/baseline` runs the same artist + song through the LLM with **no** Qloo
+tools. The results page has a "Compare with plain LLM" toggle showing the ungrounded
+plan next to the Qloo-grounded one.
 
 ## Qloo API rules this repo follows (from the official hackathon guide)
 

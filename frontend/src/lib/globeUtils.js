@@ -104,3 +104,211 @@ export function prefersReducedMotion() {
 export function hasVenueCoordinates(markets) {
   return (markets || []).some((m) => Array.isArray(m.venues) && m.venues.length > 0);
 }
+
+/**
+ * Filter out degenerate polygon rings (e.g. zero-area polygons with identical vertices)
+ * that cause H3's polygonToCells indexing to fail with code 1.
+ */
+export function sanitizeLandFeatures(features) {
+  if (!Array.isArray(features)) return [];
+
+  const isRingValid = (ring) => {
+    if (!Array.isArray(ring) || ring.length < 4) return false;
+    const unique = new Set();
+    for (const pt of ring) {
+      if (!Array.isArray(pt) || pt.length < 2) return false;
+      unique.add(`${pt[0]},${pt[1]}`);
+      if (unique.size >= 3) break;
+    }
+    return unique.size >= 3;
+  };
+
+  const isPolygonValid = (poly) => {
+    if (!Array.isArray(poly) || poly.length === 0) return false;
+    return isRingValid(poly[0]);
+  };
+
+  const sanitized = [];
+  for (const f of features) {
+    if (!f || !f.geometry) continue;
+    const { type, coordinates } = f.geometry;
+
+    if (type === "Polygon") {
+      if (isPolygonValid(coordinates)) {
+        sanitized.push(f);
+      }
+    } else if (type === "MultiPolygon") {
+      if (Array.isArray(coordinates)) {
+        const validPolys = coordinates.filter(isPolygonValid);
+        if (validPolys.length > 0) {
+          sanitized.push({
+            ...f,
+            geometry: {
+              ...f.geometry,
+              coordinates: validPolys,
+            },
+          });
+        }
+      }
+    } else {
+      sanitized.push(f);
+    }
+  }
+
+  return sanitized;
+}
+
+export function formatTime(seconds) {
+  if (typeof seconds !== "number" || isNaN(seconds)) return "0:00";
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+export function formatKey(key, mode) {
+  if (!key) return "Unknown Key";
+  const m = mode ? mode.charAt(0).toUpperCase() + mode.slice(1).toLowerCase() : "";
+  return `${key} ${m}`.trim();
+}
+
+const REGION_MAP = {
+  Nigeria: "Africa",
+  Ghana: "Africa",
+  Kenya: "Africa",
+  "South Africa": "Africa",
+  Egypt: "Africa",
+  Morocco: "Africa",
+  Senegal: "Africa",
+  "Côte d'Ivoire": "Africa",
+  Uganda: "Africa",
+  Tanzania: "Africa",
+  Rwanda: "Africa",
+  Angola: "Africa",
+  "DR Congo": "Africa",
+  Cameroon: "Africa",
+  Algeria: "Africa",
+  Tunisia: "Africa",
+  Ethiopia: "Africa",
+
+  "United Kingdom": "Europe",
+  France: "Europe",
+  Germany: "Europe",
+  Netherlands: "Europe",
+  Spain: "Europe",
+  Italy: "Europe",
+  Portugal: "Europe",
+  Sweden: "Europe",
+  Norway: "Europe",
+  Denmark: "Europe",
+  Switzerland: "Europe",
+  Belgium: "Europe",
+  Ireland: "Europe",
+  Austria: "Europe",
+  Poland: "Europe",
+
+  "United States": "North America",
+  Canada: "North America",
+  Mexico: "North America",
+
+  Brazil: "Latin America",
+  Argentina: "Latin America",
+  Colombia: "Latin America",
+  Chile: "Latin America",
+
+  Japan: "Asia/Pacific",
+  "South Korea": "Asia/Pacific",
+  Australia: "Asia/Pacific",
+  "New Zealand": "Asia/Pacific",
+  India: "Asia/Pacific",
+  Indonesia: "Asia/Pacific",
+  Philippines: "Asia/Pacific",
+  Singapore: "Asia/Pacific",
+  Thailand: "Asia/Pacific",
+
+  UAE: "Middle East",
+  "United Arab Emirates": "Middle East",
+  "Saudi Arabia": "Middle East",
+  Qatar: "Middle East",
+  Lebanon: "Middle East",
+};
+
+export function getCityRegion(country) {
+  if (!country) return "Other";
+  return REGION_MAP[country] || "Other";
+}
+
+export function generateReleaseStrategyMarkdown(result) {
+  if (!result) return "";
+  const date = new Date().toISOString().split("T")[0];
+  const audio = result.audio_features || {};
+
+  let md = `# Landfall Release Strategy: ${result.artist || "Artist"}\n\n`;
+  md += `**Date:** ${date}  \n`;
+  md += `**Track ID:** ${result.song || "Unreleased"}  \n`;
+  if (result.origin?.city) {
+    md += `**Artist Origin:** ${result.origin.city}${result.origin.country ? `, ${result.origin.country}` : ""}  \n`;
+  }
+  md += `**Predicted Fit Score:** ${result.fit_score ?? "N/A"}/100  \n\n`;
+
+  md += `## 1. Fit & Acoustic Breakdown\n\n`;
+  md += `* ${result.explanation || "No explanation provided."}\n\n`;
+  if (result.breakdown) {
+    md += `| Dimension | Score | Description |\n`;
+    md += `|---|---|---|\n`;
+    md += `| Catalog Match | ${Math.round(result.breakdown.catalog_match ?? 0)}% | Overlap of comparable artist tags with core catalog |\n`;
+    md += `| Audience Match | ${Math.round(result.breakdown.audience_match ?? 0)}% | Qloo taste graph affinity ranking across listener entities |\n`;
+    md += `| Clip Strength | ${Math.round(result.clip_strength ?? 0)}% | Peak musical energy & novelty in hook windows |\n\n`;
+  }
+
+  if (audio.tempo || audio.key) {
+    md += `### Acoustic Features\n\n`;
+    md += `- **Tempo:** ${audio.tempo ? `${Math.round(audio.tempo)} BPM` : "N/A"} (${result.tempo_band || "Standard"})\n`;
+    md += `- **Key & Mode:** ${formatKey(audio.key, audio.mode)} ${audio.key_confidence ? `(confidence: ${Math.round(audio.key_confidence * 100)}%)` : ""}\n`;
+    md += `- **Loudness:** ${audio.loudness_lufs ? `${audio.loudness_lufs} LUFS` : "N/A"}\n`;
+    md += `- **Energy:** ${result.energy_band || "Moderate"}\n`;
+    if (result.descriptors?.length) {
+      md += `- **Sound Descriptors:** ${result.descriptors.join(", ")}\n`;
+    }
+    md += `\n`;
+  }
+
+  md += `## 2. Priority Target Markets\n\n`;
+  const ranked = rankMarkets(result.markets || []);
+  const scoredMarkets = ranked.filter((m) => m.status !== "no_data" && m.score != null);
+  if (scoredMarkets.length) {
+    md += `| Rank | City | Score | Geographic Insights |\n`;
+    md += `|---|---|---|---|\n`;
+    scoredMarkets.forEach((m, idx) => {
+      md += `| ${idx + 1} | ${m.city} | ${m.score} | ${m.reason || "High affinity overperformance"} |\n`;
+    });
+    md += `\n`;
+  } else {
+    md += `No geographic markets scored with active affinity.\n\n`;
+  }
+
+  if (result.clips?.length) {
+    md += `## 3. Recommended Hook Clips\n\n`;
+    result.clips.forEach((c, idx) => {
+      md += `### Hook ${idx + 1} (${formatTime(c.start)} – ${formatTime(c.end)})\n`;
+      md += `* **Caption:** "${c.caption || ""}"\n`;
+      if (c.audio_url) md += `* **Audio Link:** ${c.audio_url}\n`;
+      md += `\n`;
+    });
+  }
+
+  if (result.blurb) {
+    md += `## 4. Pitch Blurb (DSP & Press)\n\n`;
+    md += `> ${result.blurb}\n\n`;
+  }
+
+  if (result.collaborators?.length) {
+    md += `## 5. Potential Collaborators\n\n`;
+    result.collaborators.forEach((c) => {
+      md += `* **${c.name}:** ${c.why || "High audience overlap"}\n`;
+    });
+    md += `\n`;
+  }
+
+  md += `---\n*Generated by Landfall Agentic Release Planner via Qloo Taste Intelligence.*\n`;
+  return md;
+}

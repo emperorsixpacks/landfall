@@ -12,8 +12,26 @@ body {
   background: #0e0f12;
   color: #e8eaed;
   font-family: "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 .num {
   font-family: "JetBrains Mono", monospace;
+  font-feature-settings: "tnum";
+}
+
+/* Subtle dark scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #262a33;
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a404b;
 }
