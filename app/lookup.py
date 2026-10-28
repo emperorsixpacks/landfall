@@ -64,17 +64,46 @@ def _lookup_live(query: str) -> Optional[dict]:
         return None
 
 
+def _spotify_find(query: str) -> Optional[dict]:
+    try:
+        from . import spotify
+
+        return spotify.find_artist(query)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def find_artist(query: str) -> dict:
-    """Return {ok, artist{...}, source}. Never raises."""
+    """Return {ok, artist{...}, source}. Never raises. Spotify is used to enrich
+    the artist with discography + genres when credentials are present."""
     parts = {"query": query}
     cached = cache.get("yt_artist", parts, YT_TTL)
     if cached:
         return {"ok": True, "artist": cached["artist"], "source": cached.get("source", YT_SOURCE)}
 
     artist = _lookup_live(query)
+    source = YT_SOURCE
+    spotify = _spotify_find(query)
+
+    if artist is None and spotify:
+        artist = {
+            "name": spotify["name"],
+            "top_songs": [],
+            "related": [],
+            "albums": spotify.get("albums", []),
+            "genres": spotify.get("genres", []),
+            "image": spotify.get("image"),
+        }
+        source = "Spotify"
+    elif artist is not None and spotify:
+        artist["albums"] = spotify.get("albums", [])
+        artist["genres"] = spotify.get("genres", [])
+        artist["image"] = spotify.get("image")
+        source = "YouTube Music + Spotify"
+
     if artist:
-        cache.put("yt_artist", parts, {"artist": artist, "source": YT_SOURCE})
-        return {"ok": True, "artist": artist, "source": YT_SOURCE}
+        cache.put("yt_artist", parts, {"artist": artist, "source": source})
+        return {"ok": True, "artist": artist, "source": source}
 
     bundled = _bundled(query)
     if bundled:
@@ -107,9 +136,17 @@ def bundled_artists() -> list[str]:
 
 
 def search_artists(query: str, limit: int = 8) -> list[dict]:
-    """Live artist autocomplete via YouTube Music search (unofficial)."""
+    """Live artist autocomplete: Spotify first, then YouTube Music fallback."""
     if not query or not query.strip():
         return []
+    try:
+        from . import spotify
+
+        s = spotify.search_artists(query, limit)
+        if s:
+            return [{"name": a["name"], "type": "Artist"} for a in s]
+    except Exception:  # noqa: BLE001
+        pass
     try:
         from ytmusicapi import YTMusic
 

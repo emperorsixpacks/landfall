@@ -158,6 +158,9 @@ def _find_artist(args, state) -> str:
     state["catalog"]["top_song_names"] = [s.get("title") for s in a.get("top_songs", []) if s.get("title")]
     state["catalog"]["related_names"] = [r for r in a.get("related", []) if r]
     state["catalog"]["description"] = a.get("description")
+    state["catalog"]["albums"] = a.get("albums", [])
+    state["catalog"]["genres"] = a.get("genres", [])
+    state["catalog"]["image"] = a.get("image")
     state.setdefault("evidence", {})[f"yt:{a['name']}"] = (
         f"{len(a.get('top_songs', []))} top songs, {len(a.get('related', []))} related"
     )

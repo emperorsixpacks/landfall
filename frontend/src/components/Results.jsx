@@ -343,6 +343,11 @@ export default function Results({ result, events = [], cities = [], error, onRes
         <AudienceProfile profile={result.audience_profile} />
       </section>
 
+      {/* Discography (Spotify) */}
+      {result.catalog?.albums?.length > 0 && (
+        <Discography catalog={result.catalog} />
+      )}
+
       {/* Hook clips */}
       <section className="rounded-lg border border-border bg-panel p-4 space-y-3">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">Hook clips</h2>
@@ -562,6 +567,39 @@ function AudienceProfile({ profile }) {
         </div>
       )}
     </div>
+  );
+}
+
+function Discography({ catalog }) {
+  const albums = catalog.albums || [];
+  const full = albums.filter((a) => a.type === "album");
+  const singles = albums.filter((a) => a.type === "single");
+  return (
+    <section className="rounded-lg border border-border bg-panel p-4 space-y-3">
+      <div className="flex items-center gap-3">
+        {catalog.image && (
+          <img src={catalog.image} alt="" className="h-10 w-10 rounded-full object-cover border border-border" />
+        )}
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">Discography</h2>
+          <span className="text-[10px] text-muted">Spotify</span>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {albums.slice(0, 9).map((a, i) => (
+          <div key={i} className="flex items-center justify-between rounded-md bg-raised px-3 py-2 text-xs">
+            <span className="truncate text-text">{a.name}</span>
+            <span className="num ml-2 shrink-0 text-muted">
+              {a.release_date ? a.release_date.slice(0, 4) : "—"}
+              {a.total_tracks != null && <span className="ml-1 text-[10px]">· {a.total_tracks}t</span>}
+            </span>
+          </div>
+        ))}
+      </div>
+      {full.length === 0 && singles.length > 0 && (
+        <p className="text-[11px] text-muted">Singles only available via Spotify here.</p>
+      )}
+    </section>
   );
 }
 

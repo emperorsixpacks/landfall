@@ -31,6 +31,10 @@ YOUTUBE_AUDIENCE_ENABLED = (
     os.environ.get("YOUTUBE_AUDIENCE_ENABLED", "false").lower() == "true"
 )
 
+# --- Spotify (artist lookup + catalog) --------------------------------------
+SPOTIFY_CLIENT_ID = os.environ.get("SPOTIFY_CLIENT_ID", "")
+SPOTIFY_CLIENT_SECRET = os.environ.get("SPOTIFY_CLIENT_SECRET", "")
+
 # --- Agent ------------------------------------------------------------------
 MAX_STEPS = 14
 TIME_BUDGET_SECONDS = 120.0
@@ -78,3 +82,7 @@ def qloo_ready() -> bool:
 
 def llm_ready() -> bool:
     return bool(LLM_BASE_URL and LLM_API_KEY and LLM_MODEL)
+
+
+def spotify_ready() -> bool:
+    return bool(SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET)

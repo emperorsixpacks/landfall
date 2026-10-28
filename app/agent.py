@@ -577,6 +577,11 @@ def _assemble(state, request, score, blurb):
             "entities": [{"name": e.get("name"), "id": e.get("id")} for e in state.get("related_entities", [])],
             "demographics": state["audience"].get("demographics"),
         },
+        "catalog": {
+            "albums": state.get("catalog", {}).get("albums", []),
+            "genres": state.get("catalog", {}).get("genres", []),
+            "image": state.get("catalog", {}).get("image"),
+        },
         "markets": state["markets"],
         "collaborators": [{"name": c["name"], "why": c["why"]} for c in state["collaborators"]],
         "clips": clips,
