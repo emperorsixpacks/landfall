@@ -2,12 +2,15 @@
 // these are trivially unit-testable in Node.
 
 export const COLORS = {
-  low: "#3A404B", // muted gray-blue
-  high: "#5B9DFF", // accent
-  top: "#4CC38A", // positive
+  low: "#4A5568", // muted slate (lower scores)
+  mid: "#5B9DFF", // accent (mid scores)
+  high: "#4CC38A", // positive (high scores)
+  top: "#4CC38A", // positive (top 3)
   noData: "#5A616D",
-  land: "#262A33",
-  base: "#15171C",
+  land: "#2E3642", // land — brighter than base for visibility
+  base: "#0E0F12", // ocean/base — dark
+  arc: "#5B9DFF",
+  atmosphere: "#5B9DFF",
 };
 
 export function clamp(n, min, max) {
@@ -38,10 +41,15 @@ export function interpolateColor(hexA, hexB, t) {
 }
 
 export function scoreToColor(score, rank) {
-  // Top 3 get the positive color; otherwise interpolate low → high.
+  // Top 3 get the positive color; otherwise interpolate low → mid → high.
   if (typeof rank === "number" && rank < 3) return COLORS.top;
   const s = clamp(score ?? 0, 0, 100) / 100;
-  return interpolateColor(COLORS.low, COLORS.high, s);
+  // Use a curve for better visual distribution
+  if (s < 0.5) {
+    return interpolateColor(COLORS.low, COLORS.mid, s * 2);
+  } else {
+    return interpolateColor(COLORS.mid, COLORS.high, (s - 0.5) * 2);
+  }
 }
 
 export function joinMarketsToCities(markets, cities) {

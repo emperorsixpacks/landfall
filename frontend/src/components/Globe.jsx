@@ -37,7 +37,13 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
   const dimsState = useState({ width: 800, height: Math.max(height, 420) });
   const [dims, setDims] = dimsState;
   const globeMaterial = useMemo(
-    () => new MeshPhongMaterial({ color: COLORS.base }),
+    () => new MeshPhongMaterial({ 
+      color: COLORS.base,
+      emissive: "#FFFFFF",
+      emissiveIntensity: 0.05,
+      shininess: 15,
+      specular: "#E2E8F0",
+    }),
     []
   );
 
@@ -70,7 +76,7 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
       return;
     }
     controls.autoRotate = true;
-    controls.autoRotateSpeed = 0.6;
+    controls.autoRotateSpeed = 0.4;
     return () => {
       controls.autoRotate = false;
     };
@@ -164,57 +170,57 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
         ref={globeEl}
         width={dims.width}
         height={dims.height}
-      backgroundColor="rgba(0,0,0,0)"
-      globeMaterial={globeMaterial}
-      atmosphereColor="#5B9DFF"
-      atmosphereAltitude={0.12}
-      hexPolygonsData={LAND}
-      hexPolygonResolution={3}
-      hexPolygonMargin={0.62}
-      hexPolygonColor={() => COLORS.land}
-      hexPolygonAltitude={0.006}
-      pointsData={scoredPoints}
-      pointLat={(d) => d.lat}
-      pointLng={(d) => d.lng}
-      pointAltitude={(d) => (d.isNoData ? 0.01 : 0.02 + (d.score ?? 0) / 100 * 0.3)}
-      pointRadius={(d) => (d.isNoData ? 0.18 : 0.3 + (d.score ?? 0) / 100 * 1.4)}
-      pointColor={(d) => (d.isNoData ? COLORS.noData : scoreToColor(d.score, d.rank))}
-      pointLabel={(d) => {
-        if (d.isNoData) {
-          return `<div class="globe-tip"><b>${d.city}</b><span>no Qloo data</span></div>`;
+        backgroundColor="rgba(255,255,255,0)"
+        globeMaterial={globeMaterial}
+        atmosphereColor={COLORS.atmosphere}
+        atmosphereAltitude={0.12}
+        hexPolygonsData={LAND}
+        hexPolygonResolution={3}
+        hexPolygonMargin={0.68}
+        hexPolygonColor={() => COLORS.land}
+        hexPolygonAltitude={0.003}
+        pointsData={scoredPoints}
+        pointLat={(d) => d.lat}
+        pointLng={(d) => d.lng}
+        pointAltitude={(d) => (d.isNoData ? 0.008 : 0.015 + (d.score ?? 0) / 100 * 0.25)}
+        pointRadius={(d) => (d.isNoData ? 0.15 : 0.3 + (d.score ?? 0) / 100 * 1.3)}
+        pointColor={(d) => (d.isNoData ? COLORS.noData : scoreToColor(d.score, d.rank))}
+        pointLabel={(d) => {
+          if (d.isNoData) {
+            return `<div class="globe-tip"><b>${d.city}</b><span>no Qloo data</span></div>`;
+          }
+          return `<div class="globe-tip"><b>${d.city}</b><span class="num">${d.score}</span><small>${d.reason}</small></div>`;
+        }}
+        onPointHover={(d) => onHover && onHover(d ? d.city : null)}
+        onPointClick={(d) => {
+          if (d && onSelect) onSelect(d.city);
+        }}
+        arcsData={arcsData}
+        arcColor={(d) => scoreToColor(d.score)}
+        arcStroke={(d) => 0.35 + (d.score ?? 0) / 100 * 1.1}
+        arcDashLength={0.5}
+        arcDashGap={reduced ? 0 : 0.25}
+        arcDashAnimateTime={reduced ? 0 : 2600}
+        arcAltitudeAutoScale={0.3}
+        labelsData={showMarkets ? top3 : []}
+        labelLat={(d) => d.lat}
+        labelLng={(d) => d.lng}
+        labelText={(d) => d.city}
+        labelLabel={(d) =>
+          `<div style="font-family:Inter,system-ui,sans-serif;font-size:13px;color:#1A1F36;background:rgba(255,255,255,0.98);padding:6px 10px;border-radius:8px;border:1px solid #E1E4E8;backdrop-filter:blur(12px);box-shadow:0 4px 16px rgba(0,0,0,0.1);">${d.city} <span style="font-family:'JetBrains Mono',monospace;color:#48BB78;font-weight:600;">${d.score}</span></div>`
         }
-        return `<div class="globe-tip"><b>${d.city}</b><span class="num">${d.score}</span><small>${d.reason}</small></div>`;
-      }}
-      onPointHover={(d) => onHover && onHover(d ? d.city : null)}
-      onPointClick={(d) => {
-        if (d && onSelect) onSelect(d.city);
-      }}
-      arcsData={arcsData}
-      arcColor={(d) => scoreToColor(d.score)}
-      arcStroke={(d) => 0.4 + (d.score ?? 0) / 100 * 1.2}
-      arcDashLength={0.4}
-      arcDashGap={reduced ? 0 : 0.15}
-      arcDashAnimateTime={reduced ? 0 : 2000}
-      arcAltitudeAutoScale={0.3}
-      labelsData={showMarkets ? top3 : []}
-      labelLat={(d) => d.lat}
-      labelLng={(d) => d.lng}
-      labelText={(d) => d.city}
-      labelLabel={(d) =>
-        `<div style="font-family:Inter,system-ui,sans-serif;font-size:12px;color:#E8EAED;background:rgba(28,31,38,0.9);padding:2px 6px;border-radius:4px;border:1px solid #262A33;">${d.city} <span style="font-family:'JetBrains Mono',monospace;color:#4CC38A;">${d.score}</span></div>`
-      }
-      labelSize={1}
-      labelColor={() => "rgba(0,0,0,0)"}
-      labelDotRadius={0.2}
-      labelResolution={2}
-      ringsData={ringsData}
-      ringLat={(d) => d.lat}
-      ringLng={(d) => d.lng}
-      ringColor={(d) => (d.isSelected ? "#5B9DFF" : "#5A616D")}
-      ringMaxRadius={(d) => (d.isSelected ? 4 : 2.5)}
-      ringPropagationSpeed={(d) => (d.isSelected ? 1.5 : 0.4)}
-      ringRepeatPeriod={d => (d.isSelected ? 700 : 2000)}
-      pointsMerge
+        labelSize={1.15}
+        labelColor={() => "rgba(0,0,0,0)"}
+        labelDotRadius={0.2}
+        labelResolution={2}
+        ringsData={ringsData}
+        ringLat={(d) => d.lat}
+        ringLng={(d) => d.lng}
+        ringColor={(d) => (d.isSelected ? COLORS.arc : "#CBD5E0")}
+        ringMaxRadius={(d) => (d.isSelected ? 3.8 : 2.4)}
+        ringPropagationSpeed={(d) => (d.isSelected ? 1.5 : 0.6)}
+        ringRepeatPeriod={d => (d.isSelected ? 900 : 2400)}
+        pointsMerge
       />
     </div>
   );

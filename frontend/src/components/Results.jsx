@@ -1,7 +1,8 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import GlobeContainer from "./GlobeContainer.jsx";
 import MarketList from "./MarketList.jsx";
 import SoundToTaste from "./SoundToTaste.jsx";
+import { useCountUp, useReducedMotion } from "../hooks/useMotion";
 import {
   COLORS,
   formatKey,
@@ -92,24 +93,24 @@ export default function Results({ result, events = [], cities = [], error, onRes
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-baseline justify-between gap-4 border-b border-border pb-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-4 border-b border-border pb-5">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight text-text">
+            <h1 className="text-3xl font-semibold tracking-tight text-text">
               {result.artist}
             </h1>
             {result.data_mode === "mock" && (
-              <span className="rounded border border-border px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-muted num">
+              <span className="rounded-md border border-border px-2 py-1 text-2xs uppercase tracking-wider text-muted num">
                 sample data
               </span>
             )}
             {result.origin?.city && (
-              <span className="text-xs text-muted">
-                Origin: <span className="text-text">{result.origin.city}</span>
+              <span className="text-sm text-muted">
+                Origin: <span className="text-text font-medium">{result.origin.city}</span>
               </span>
             )}
           </div>
-          <p className="mt-1 text-xs text-muted">
+          <p className="mt-2 text-sm text-text-secondary">
             {result.song ? `Track: ${result.song}` : "Acoustic audio omitted (plan only)"}
           </p>
         </div>
@@ -120,21 +121,21 @@ export default function Results({ result, events = [], cities = [], error, onRes
               setShowBaseline((s) => !s);
               if (!baseline) loadBaseline();
             }}
-            className={`rounded-md border px-3 py-1.5 text-xs transition-colors ${
-              showBaseline ? "border-accent text-text" : "border-border text-muted hover:border-accent hover:text-text"
+            className={`rounded-lg border px-4 py-2 text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-accent ${
+              showBaseline ? "border-accent bg-accent-subtle text-text" : "border-border-light bg-surface text-text-secondary hover:border-accent hover:text-text"
             }`}
           >
             Compare with plain LLM
           </button>
           <button
             onClick={copyReport}
-            className="rounded-md border border-border px-3 py-1.5 text-xs text-muted hover:border-accent hover:text-text transition-colors"
+            className="rounded-lg border border-border-light bg-surface px-4 py-2 text-sm text-text-secondary hover:border-accent hover:text-text transition-all focus:outline-none focus:ring-2 focus:ring-accent"
           >
             {copiedReport ? "Copied report" : "Copy report"}
           </button>
           <button
             onClick={onReset}
-            className="rounded-md border border-border px-3 py-1.5 text-xs text-muted hover:text-text transition-colors"
+            className="rounded-lg border border-border-light bg-surface px-4 py-2 text-sm text-text-secondary hover:text-text transition-all focus:outline-none focus:ring-2 focus:ring-accent"
           >
             New run
           </button>
@@ -142,7 +143,7 @@ export default function Results({ result, events = [], cities = [], error, onRes
       </div>
 
       {coverageGap && (
-        <div className="rounded-md border border-border bg-panel p-3 text-xs text-muted leading-relaxed">
+        <div className="rounded-lg border border-warning-subtle bg-warning-subtle/30 p-4 text-sm text-text-secondary leading-relaxed">
           Data coverage note: Qloo returned limited signals for certain tags or cities.
           Missing components were renormalized out of the fit score and flagged below — nothing is fabricated.
         </div>
@@ -156,11 +157,11 @@ export default function Results({ result, events = [], cities = [], error, onRes
       {/* Top row: Fit Score & Audio Features */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Fit Score */}
-        <section className="rounded-lg border border-border bg-panel p-4 space-y-3">
+        <section className="rounded-xl border border-border bg-panel p-5 space-y-4 shadow-soft">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">Predicted fit</h2>
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-6">
             <FitGauge score={result.fit_score} />
-            <div className="flex-1 space-y-2.5">
+            <div className="flex-1 space-y-3">
               {result.breakdown && (
                 <>
                   <FitRow label="Catalog match" value={result.breakdown.catalog_match} />
@@ -171,10 +172,15 @@ export default function Results({ result, events = [], cities = [], error, onRes
             </div>
           </div>
           {result.explanation && (
-            <p className="mt-2 text-xs text-muted leading-relaxed">{result.explanation}</p>
+            <p className="mt-3 text-sm text-text-secondary leading-relaxed">{result.explanation}</p>
+          )}
+          {ranked[0] && ranked[0].score != null && (
+            <p className="text-small text-text">
+              Strongest in <span className="font-medium">{ranked[0].city}</span> — {ranked[0].reason}
+            </p>
           )}
           {result.warnings?.length > 0 && (
-            <ul className="text-[11px] text-muted space-y-0.5">
+            <ul className="text-xs text-muted space-y-1">
               {result.warnings.map((w, i) => (
                 <li key={i}>– {w} unavailable</li>
               ))}
@@ -183,25 +189,25 @@ export default function Results({ result, events = [], cities = [], error, onRes
         </section>
 
         {/* Audio features */}
-        <section className="rounded-lg border border-border bg-panel p-4 space-y-3 lg:col-span-2">
+        <section className="rounded-xl border border-border bg-panel p-5 space-y-4 lg:col-span-2 shadow-soft">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">Audio features</h2>
-            <span className="num text-[11px] text-muted/60">librosa · ffmpeg</span>
+            <span className="num text-2xs text-muted/60">librosa · ffmpeg</span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="rounded-md bg-raised p-2.5">
-              <span className="text-[10px] uppercase text-muted tracking-wider block">Tempo</span>
-              <span className="num text-lg font-semibold text-text">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="rounded-lg bg-raised p-3">
+              <span className="text-2xs uppercase text-muted tracking-wider block">Tempo</span>
+              <span className="num text-xl font-semibold text-text">
                 {audio.tempo ? `${Math.round(audio.tempo)}` : "—"}
               </span>
-              <span className="text-[11px] text-muted ml-1">BPM</span>
+              <span className="text-xs text-muted ml-1">BPM</span>
               {result.tempo_band && (
-                <span className="block text-[11px] text-muted mt-0.5">{result.tempo_band}</span>
+                <span className="block text-xs text-muted mt-1">{result.tempo_band}</span>
               )}
             </div>
 
-            <div className="rounded-md bg-raised p-2.5">
+            <div className="rounded-lg bg-raised p-3">
               <span className="text-[10px] uppercase text-muted tracking-wider block">Key</span>
               <span className="text-sm font-semibold text-text block mt-0.5">
                 {formatKey(audio.key, audio.mode)}
@@ -213,7 +219,7 @@ export default function Results({ result, events = [], cities = [], error, onRes
               )}
             </div>
 
-            <div className="rounded-md bg-raised p-2.5">
+            <div className="rounded-lg bg-raised p-3">
               <span className="text-[10px] uppercase text-muted tracking-wider block">Loudness</span>
               <span className="num text-lg font-semibold text-text">
                 {audio.loudness_lufs ?? "-16.0"}
@@ -221,7 +227,7 @@ export default function Results({ result, events = [], cities = [], error, onRes
               <span className="text-[11px] text-muted ml-1">LUFS</span>
             </div>
 
-            <div className="rounded-md bg-raised p-2.5">
+            <div className="rounded-lg bg-raised p-3">
               <span className="text-[10px] uppercase text-muted tracking-wider block">Energy</span>
               <span className="text-sm font-semibold text-text block mt-0.5">
                 {result.energy_band || "Moderate"}
@@ -266,7 +272,7 @@ export default function Results({ result, events = [], cities = [], error, onRes
       </div>
 
       {/* Sound-to-taste bridge */}
-      <section className="rounded-lg border border-border bg-panel p-4 space-y-3">
+      <section className="rounded-xl border border-border bg-panel p-5 shadow-soft space-y-3">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">Sound to taste</h2>
         <SoundToTaste bridge={result.bridge} />
       </section>
@@ -275,7 +281,7 @@ export default function Results({ result, events = [], cities = [], error, onRes
       {showBaseline && <BaselineComparison baseline={baseline} main={result} />}
 
       {/* Target markets & Globe */}
-      <section className="rounded-lg border border-border bg-panel p-4 space-y-3">
+      <section className="rounded-xl border border-border bg-panel p-5 shadow-soft space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">Target markets</h2>
           <div className="flex items-center gap-3 text-xs text-muted">
@@ -343,7 +349,7 @@ export default function Results({ result, events = [], cities = [], error, onRes
       </section>
 
       {/* Audience profile & demographics */}
-      <section className="rounded-lg border border-border bg-panel p-4 space-y-4">
+      <section className="rounded-xl border border-border bg-panel p-5 shadow-soft space-y-4">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">Audience profile</h2>
         <AudienceProfile profile={result.audience_profile} />
       </section>
@@ -354,26 +360,26 @@ export default function Results({ result, events = [], cities = [], error, onRes
       )}
 
       {/* Hook clips */}
-      <section className="rounded-lg border border-border bg-panel p-4 space-y-3">
+      <section className="rounded-xl border border-border bg-panel p-5 shadow-soft space-y-3">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">Hook clips</h2>
         <Clips clips={result.clips} />
       </section>
 
       {/* Blurb & Collaborators */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <section className="rounded-lg border border-border bg-panel p-4 space-y-3">
+        <section className="rounded-xl border border-border bg-panel p-5 shadow-soft space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">Pitch blurb</h2>
           <Blurb blurb={result.blurb} />
         </section>
 
-        <section className="rounded-lg border border-border bg-panel p-4 space-y-3">
+        <section className="rounded-xl border border-border bg-panel p-5 shadow-soft space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">Collaborators</h2>
           <Collaborators collabs={result.collaborators} />
         </section>
       </div>
 
       {/* Trace */}
-      <section className="rounded-lg border border-border bg-panel p-4 space-y-2">
+      <section className="rounded-xl border border-border bg-panel p-5 shadow-soft space-y-2">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">Agent trace</h2>
         <Trace events={events} />
       </section>
@@ -389,7 +395,7 @@ function Toggle({ label, checked, disabled, note, onChange }) {
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
-        className="accent-[#5B9DFF] rounded"
+        className="text-accent rounded focus:ring-2 focus:ring-accent"
       />
       <span>{label}</span>
       {note && <span className="text-[10px] text-muted">({note})</span>}
@@ -463,33 +469,32 @@ function MarketDetail({ market, collaborators, onClose }) {
 function FitGauge({ score }) {
   const r = 50;
   const c = 2 * Math.PI * r;
-  const pct = score == null ? 0 : Math.min(100, Math.max(0, score)) / 100;
+  const target = score == null ? 0 : Math.min(100, Math.max(0, score));
+  const count = useCountUp(target, 900);
+  const reduced = useReducedMotion();
+  const [drawn, setDrawn] = useState(reduced ? target : 0);
+  useEffect(() => {
+    const t = setTimeout(() => setDrawn(target), 50);
+    return () => clearTimeout(t);
+  }, [target]);
+
+  const dash = c * (drawn / 100);
+  const color = target >= 70 ? "var(--positive)" : target >= 40 ? "var(--accent)" : "var(--warn)";
 
   return (
-    <svg viewBox="0 0 120 120" className="h-24 w-24 shrink-0">
-      <circle cx="60" cy="60" r={r} fill="none" stroke="#262A33" strokeWidth="10" />
+    <svg viewBox="0 0 120 120" className="h-28 w-28 shrink-0">
+      <circle cx="60" cy="60" r={r} fill="none" stroke="#252930" strokeWidth="10" />
       <circle
-        cx="60"
-        cy="60"
-        r={r}
-        fill="none"
-        stroke="#4CC38A"
-        strokeWidth="10"
-        strokeDasharray={`${c * pct} ${c}`}
-        strokeLinecap="round"
-        transform="rotate(-90 60 60)"
+        cx="60" cy="60" r={r} fill="none" stroke={color} strokeWidth="10"
+        strokeDasharray={`${c} ${c}`} strokeDashoffset={c - dash}
+        strokeLinecap="round" transform="rotate(-90 60 60)"
+        style={{ transition: reduced ? "none" : "stroke-dashoffset 900ms var(--ease-out)" }}
       />
-      <text
-        x="60"
-        y="60"
-        textAnchor="middle"
-        dominantBaseline="middle"
-        className="num"
-        fill="#E8EAED"
-        fontSize="24"
-        fontWeight="600"
-      >
-        {score == null ? "—" : score}
+      <text x="60" y="56" textAnchor="middle" dominantBaseline="middle" className="num" fill="#E8EAED" fontSize="28" fontWeight="600">
+        {score == null ? "—" : count}
+      </text>
+      <text x="60" y="76" textAnchor="middle" className="num" fill="#7A808C" fontSize="9">
+        predicted fit
       </text>
     </svg>
   );
@@ -579,7 +584,7 @@ function ArtistCard({ artist, catalog }) {
   const ytSongs = (catalog.top_songs || []).filter((s) => s.title).slice(0, 5).map((s) => s.title);
   const spSongs = (catalog.spotify_top_songs || []).filter((s) => s.title).slice(0, 5).map((s) => s.title);
   return (
-    <section className="rounded-lg border border-border bg-panel p-4">
+    <section className="rounded-xl border border-border bg-panel p-5 shadow-soft">
       <div className="flex items-center gap-4">
         {catalog.image && (
           <img
@@ -625,7 +630,7 @@ function Discography({ catalog }) {
   const full = albums.filter((a) => a.type === "album");
   const singles = albums.filter((a) => a.type === "single");
   return (
-    <section className="rounded-lg border border-border bg-panel p-4 space-y-3">
+    <section className="rounded-xl border border-border bg-panel p-5 shadow-soft space-y-3">
       <div className="flex items-center gap-3">
         {catalog.image && (
           <img src={catalog.image} alt="" className="h-10 w-10 rounded-full object-cover border border-border" />
@@ -761,7 +766,7 @@ function Waveform({ peaks = [], currentTime = 0, duration = 1, onSeek }) {
     peaks.forEach((p, i) => {
       const hh = Math.max(1, p * h);
       const isPlayed = i / peaks.length <= playRatio;
-      ctx.fillStyle = isPlayed ? "#5B9DFF" : "#3A404B";
+      ctx.fillStyle = isPlayed ? "#4A8FE7" : "#636A78";
       ctx.fillRect(i * bar, (h - hh) / 2, Math.max(1, bar - 1), hh);
     });
   }, [peaks, currentTime, duration]);
@@ -850,30 +855,38 @@ function Trace({ events = [] }) {
 function BaselineComparison({ baseline, main }) {
   if (!baseline) {
     return (
-      <section className="rounded-lg border border-border bg-panel p-4">
+      <section className="rounded-xl border border-border bg-panel p-5 shadow-soft">
         <p className="text-sm text-muted">Loading plain-LLM baseline…</p>
       </section>
     );
   }
   return (
-    <section className="rounded-lg border border-accent/30 bg-panel p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-accent">Plain LLM (no taste data)</h2>
-        <span className="num text-xs text-muted">
-          fit {baseline.fit_score ?? "—"}/100 vs Qloo {main.fit_score ?? "—"}/100
+    <section className="rounded-card border border-danger/40 bg-panel p-5 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <h2 className="text-label text-danger">Plain LLM (no Qloo)</h2>
+          <span className="rounded-pill border border-danger/40 px-2 py-0.5 text-label text-danger">guesses only</span>
+        </div>
+        <span className="num text-muted">
+          claims {baseline.fit_score ?? "—"}/100 · Qloo measured {main.fit_score ?? "—"}/100
         </span>
       </div>
-      <p className="text-xs text-muted italic">{baseline.caveat}</p>
+
+      <p className="text-small text-secondary">
+        Without Qloo taste data, a plain LLM invents confident numbers. Qloo measures real
+        affinity — which is why these scores differ. The plan below is not grounded in any data.
+      </p>
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-muted">Blurb</p>
-          <p className="mt-1 text-xs leading-relaxed text-text">{baseline.blurb}</p>
+          <p className="text-label text-muted">Blurb</p>
+          <p className="mt-1 text-small leading-relaxed text-text">{baseline.blurb}</p>
         </div>
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-muted">Markets (guessed)</p>
+          <p className="text-label text-muted">Markets (guessed)</p>
           <ul className="mt-1 space-y-1">
             {(baseline.markets || []).map((m, i) => (
-              <li key={i} className="flex justify-between text-xs">
+              <li key={i} className="flex justify-between text-small">
                 <span className="text-text">{m.city}</span>
                 <span className="num text-muted">{m.score ?? "—"}</span>
               </li>
@@ -881,10 +894,10 @@ function BaselineComparison({ baseline, main }) {
           </ul>
         </div>
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-muted">Collaborators (guessed)</p>
+          <p className="text-label text-muted">Collaborators (guessed)</p>
           <div className="mt-1 flex flex-wrap gap-1.5">
             {(baseline.collaborators || []).map((c, i) => (
-              <span key={i} className="rounded-full border border-border px-2 py-0.5 text-xs text-muted">
+              <span key={i} className="rounded-pill border border-border px-2 py-0.5 text-small text-muted">
                 {c.name}
               </span>
             ))}
