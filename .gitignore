@@ -27,3 +27,6 @@ samples/*.mp3
 samples/*.wav
 samples/*.m4a
 !samples/.gitkeep
+
+# Editor formatter temp files
+.null-ls_*
