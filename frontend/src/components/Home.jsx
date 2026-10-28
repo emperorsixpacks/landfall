@@ -1,23 +1,28 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import GlobeContainer from "./GlobeContainer.jsx";
-import { formatTime, joinMarketsToCities, prefersReducedMotion } from "../lib/globeUtils";
+import { useInView, useReducedMotion } from "../hooks/useMotion";
 
 const PRESETS = [
-  { label: "Global", cities: ["Lagos", "London", "New York", "Paris", "Tokyo", "Johannesburg", "Los Angeles", "Accra"] },
+  { label: "Global", cities: ["Lagos", "London", "New York", "Paris", "Tokyo", "Johannesburg", "Los Angeles", "Accra", "Mumbai", "São Paulo", "Berlin", "Dubai"] },
   { label: "West Africa", cities: ["Lagos", "Abuja", "Accra", "Dakar", "Abidjan", "Port Harcourt", "Benin City"] },
   { label: "Europe", cities: ["London", "Paris", "Berlin", "Amsterdam", "Madrid", "Lisbon", "Stockholm"] },
   { label: "North America", cities: ["New York", "Los Angeles", "Atlanta", "Toronto", "Chicago", "Miami"] },
 ];
 
+const HEADLINE = ["Where", "will", "your", "next", "song", "land?"];
+
 export default function Home({ config, allCities = [], onRun, onError }) {
-  // Artist state
+  const reduced = useReducedMotion();
+
+  // Artist
   const [artistQuery, setArtistQuery] = useState("");
   const [debouncedArtistQuery, setDebouncedArtistQuery] = useState("");
   const [resolvedArtist, setResolvedArtist] = useState(null);
   const [showArtistDropdown, setShowArtistDropdown] = useState(false);
+  const [artistMatches, setArtistMatches] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
   const artistInputRef = useRef(null);
 
-  // Track state
+  // Track
   const [songId, setSongId] = useState(null);
   const [songName, setSongName] = useState(null);
   const [duration, setDuration] = useState(null);
@@ -27,27 +32,15 @@ export default function Home({ config, allCities = [], onRun, onError }) {
   const [uploadBusy, setUploadBusy] = useState(false);
   const fileInputRef = useRef(null);
 
-  // Markets state
-  const [cities, setCities] = useState(PRESETS[1].cities); // Default West Africa
+  // Markets
+  const [cities, setCities] = useState(PRESETS[1].cities);
   const [activePreset, setActivePreset] = useState("West Africa");
   const [marketSearch, setMarketSearch] = useState("");
 
-  // Refs & accessibility
-  const runBtnRef = useRef(null);
-  const mobileRunBtnRef = useRef(null);
-  const reducedMotion = prefersReducedMotion();
-
-  // Debounce artist query (250ms)
   useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedArtistQuery(artistQuery.trim());
-    }, 250);
-    return () => clearTimeout(handler);
+    const h = setTimeout(() => setDebouncedArtistQuery(artistQuery.trim()), 250);
+    return () => clearTimeout(h);
   }, [artistQuery]);
-
-  // Live artist search (YouTube Music), debounced — no hardcoded directory.
-  const [artistMatches, setArtistMatches] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,52 +52,30 @@ export default function Home({ config, allCities = [], onRun, onError }) {
     setIsSearching(true);
     fetch(`/api/artists/search?q=${encodeURIComponent(debouncedArtistQuery)}`)
       .then((r) => r.json())
-      .then((list) => {
-        if (!cancelled) setArtistMatches(list || []);
-      })
-      .catch(() => {
-        if (!cancelled) setArtistMatches([]);
-      })
-      .finally(() => {
-        if (!cancelled) setIsSearching(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+      .then((list) => { if (!cancelled) setArtistMatches(list || []); })
+      .catch(() => { if (!cancelled) setArtistMatches([]); })
+      .finally(() => { if (!cancelled) setIsSearching(false); });
+    return () => { cancelled = true; };
   }, [debouncedArtistQuery]);
 
-  // Handle artist selection
-  function handleSelectArtist(name) {
+  function selectArtist(name) {
     setResolvedArtist(name);
     setArtistQuery(name);
     setShowArtistDropdown(false);
   }
 
-  function handleChangeArtist() {
+  function changeArtist() {
     setResolvedArtist(null);
     setArtistQuery("");
     setShowArtistDropdown(false);
     setTimeout(() => artistInputRef.current?.focus(), 50);
   }
 
-  // Handle file upload
-  async function handleFileUpload(file) {
+  async function upload(file) {
     if (!file) return;
     setUploadBusy(true);
     const fd = new FormData();
     fd.append("file", file);
-
-    // Read duration client-side for immediate display without layout shift
-    try {
-      const audio = new Audio();
-      audio.src = URL.createObjectURL(file);
-      audio.onloadedmetadata = () => {
-        if (audio.duration && !isNaN(audio.duration)) {
-          setDuration(Math.round(audio.duration));
-        }
-      };
-    } catch {}
-
     try {
       const res = await fetch("/api/upload", { method: "POST", body: fd });
       if (!res.ok) {
@@ -124,7 +95,7 @@ export default function Home({ config, allCities = [], onRun, onError }) {
     }
   }
 
-  function handleUseSampleTrack() {
+  function useSample() {
     const s = config.sample_tracks?.[0];
     if (s) {
       setSongId(s.song_id);
@@ -133,12 +104,12 @@ export default function Home({ config, allCities = [], onRun, onError }) {
       setSongId("sample_demo_track");
       setSongName("Sample Demo Track");
     }
-    setDuration(184); // 3:04
+    setDuration(184);
     setIsSampleTrack(true);
     setRightsConfirmed(true);
   }
 
-  function handleRemoveSong() {
+  function removeSong() {
     setSongId(null);
     setSongName(null);
     setDuration(null);
@@ -147,568 +118,359 @@ export default function Home({ config, allCities = [], onRun, onError }) {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  // Markets handling
-  function handleSelectPreset(preset) {
-    setActivePreset(preset.label);
-    setCities(preset.cities.slice(0, 12));
+  function selectPreset(p) {
+    setActivePreset(p.label);
+    setCities(p.cities.slice(0, 12));
   }
 
   function toggleCity(city) {
     setActivePreset(null);
     setCities((prev) => {
-      if (prev.includes(city)) {
-        return prev.filter((c) => c !== city);
-      }
-      if (prev.length >= 12) return prev; // max 12
+      if (prev.includes(city)) return prev.filter((c) => c !== city);
+      if (prev.length >= 12) return prev;
       return [...prev, city];
     });
   }
 
   const cityPool = useMemo(() => {
-    return allCities.length > 0
-      ? allCities
-      : PRESETS[0].cities.map((c) => ({ city: c, country: "" }));
+    if (allCities.length > 0) return allCities;
+    return PRESETS[0].cities.map((c) => ({ city: c, country: "" }));
   }, [allCities]);
 
   const displayedCities = useMemo(() => {
-    if (!marketSearch.trim()) {
-      // show current selected cities plus remaining default preset cities
-      const set = new Set(cities);
-      PRESETS[0].cities.forEach((c) => set.add(c));
-      return cityPool.filter((item) => set.has(item.city));
+    const set = new Set(cities);
+    if (marketSearch.trim()) {
+      const q = marketSearch.toLowerCase();
+      return cityPool.filter((c) => c.city.toLowerCase().includes(q) || (c.country && c.country.toLowerCase().includes(q)));
     }
-    const q = marketSearch.toLowerCase();
-    return cityPool.filter(
-      (item) => item.city.toLowerCase().includes(q) || (item.country && item.country.toLowerCase().includes(q))
-    );
+    return cityPool.filter((c) => set.has(c.city));
   }, [cityPool, cities, marketSearch]);
 
-  // Joined markets for the small live preview globe
-  const previewJoinedMarkets = useMemo(() => {
-    const base = cities.map((c) => ({ city: c, score: 85, status: "scored" }));
-    return joinMarketsToCities(base, allCities);
-  }, [cities, allCities]);
-
-  // Readiness checklist calculations
   const hasArtist = Boolean(resolvedArtist);
   const hasTrack = Boolean(songId);
   const hasRights = isSampleTrack || rightsConfirmed;
   const hasMarkets = cities.length > 0;
   const isReady = hasArtist && hasTrack && hasRights && hasMarkets;
 
-  // Missing items description
-  const missingItems = [];
-  if (!hasArtist) missingItems.push("Artist");
-  if (!hasTrack) missingItems.push("Track");
-  if (!hasRights) missingItems.push("Rights confirmation");
-  if (!hasMarkets) missingItems.push("Target markets");
+  const missing = [];
+  if (!hasArtist) missing.push("Artist");
+  if (!hasTrack) missing.push("Track");
+  if (!hasRights) missing.push("Rights confirmation");
+  if (!hasMarkets) missing.push("Target markets");
 
   function start() {
     if (!isReady) return;
-    onRun({
-      artist: resolvedArtist.trim(),
-      song_id: songId,
-      genre: genre.trim() || null,
-      cities,
-    });
+    onRun({ artist: resolvedArtist.trim(), song_id: songId, genre: genre.trim() || null, cities });
   }
 
-  // "Try an example" button: fills Tems, sample track, West Africa preset, then focuses Run
-  function handleTryExample() {
-    setResolvedArtist("Tems");
-    setArtistQuery("Tems");
-    setShowArtistDropdown(false);
-
-    const s = config.sample_tracks?.[0];
-    if (s) {
-      setSongId(s.song_id);
-      setSongName(s.name);
-    } else {
-      setSongId("sample_demo_tems");
-      setSongName("Tems - Free Mind (Sample)");
-    }
-    setDuration(192); // 3:12
-    setIsSampleTrack(true);
-    setRightsConfirmed(true);
-    setGenre("Afrobeats");
-
-    const westAfrica = PRESETS[1];
-    setCities(westAfrica.cities);
-    setActivePreset(westAfrica.label);
-
-    setTimeout(() => {
-      runBtnRef.current?.focus();
-      mobileRunBtnRef.current?.focus();
-    }, 60);
-  }
-
-  // Keyboard shortcut: Cmd+Enter or Ctrl+Enter runs when ready
   useEffect(() => {
-    function onKeyDown(e) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-        if (isReady) {
-          e.preventDefault();
-          start();
-        }
+    function onKey(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && isReady) {
+        e.preventDefault();
+        start();
       }
     }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [isReady, resolvedArtist, songId, genre, cities]);
 
   return (
-    <div className="space-y-8">
-      {/* HERO SECTION */}
-      <div className="space-y-4">
-        <h1 className="text-[36px] font-semibold leading-tight text-text tracking-tight">
-          Where will your next song land?
-        </h1>
-        <p className="text-base text-text-secondary leading-relaxed max-w-2xl">
-          Pick an artist, drop an unreleased track, and an agent uses Qloo taste data
-          to predict audience fit, the best markets, and the clip to post.
-        </p>
-
-        <div className="pt-2">
-          <button
-            type="button"
-            onClick={handleTryExample}
-            className="rounded-lg border border-border-light bg-surface px-4 py-2 text-sm font-medium text-text hover:border-accent hover:bg-accent-subtle transition-all focus:outline-none focus:ring-2 focus:ring-accent"
-          >
-            Try an example
-          </button>
+    <div>
+      <div className="grid grid-cols-1 gap-12 desktop:grid-cols-2">
+        {/* Left: hero (sticky on desktop) */}
+        <div className="self-start desktop:sticky desktop:top-20">
+          <Hero reduced={reduced} />
+          <div className="mt-5 flex flex-wrap gap-2">
+            {["Qloo taste data", "Audio analysis", "Every step traced"].map((t) => (
+              <span key={t} className="rounded-pill border border-border px-3 py-1 text-small text-muted">
+                {t}
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {/* TWO COLUMN LAYOUT: Left flex form, Right 360px sticky preview */}
-      <div className="flex flex-col desktop:flex-row desktop:items-start gap-8">
-        {/* Left column: Form sections */}
-        <div className="flex-1 min-w-0 space-y-6">
-          {/* 1. Artist Typeahead */}
-          <section className="rounded-xl border border-border bg-panel p-5 space-y-4 shadow-soft">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">
-              1. Artist
-            </h2>
-
-            {/* Fixed height container to prevent layout shift */}
-            <div className="relative min-h-[44px]">
-              {resolvedArtist ? (
-                <div className="flex h-[44px] items-center justify-between rounded-lg border border-border-light bg-raised px-4">
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-sm font-semibold text-text">{resolvedArtist}</span>
-                    <span className="flex items-center gap-1.5 text-xs text-positive font-medium">
-                      <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                      <span>Found in Qloo</span>
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleChangeArtist}
-                    className="text-xs text-accent hover:text-accent-hover font-medium focus:outline-none focus:ring-2 focus:ring-accent rounded-md px-2 py-1"
-                  >
-                    Change
-                  </button>
+        {/* Right: form */}
+        <div className="space-y-5">
+          <FormSection index="1" title="Artist">
+            {resolvedArtist ? (
+              <div className="flex items-center justify-between rounded-control border border-border bg-raised px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <Check size={16} reduced={reduced} />
+                  <span className="text-body font-medium text-text">{resolvedArtist}</span>
+                  <span className="text-small text-positive">Found in Qloo</span>
                 </div>
-              ) : (
-                <div className="relative">
-                  <input
-                    ref={artistInputRef}
-                    value={artistQuery}
-                    onChange={(e) => {
-                      setArtistQuery(e.target.value);
-                      setShowArtistDropdown(true);
-                    }}
-                    onFocus={() => {
-                      if (artistQuery.trim()) setShowArtistDropdown(true);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        if (artistMatches.length > 0) {
-                          e.preventDefault();
-                          handleSelectArtist(artistMatches[0].name);
-                        }
-                      } else if (e.key === "Escape") {
-                        setShowArtistDropdown(false);
-                      }
-                    }}
-                    placeholder="Search an artist, e.g. Tems"
-                    className="w-full h-[44px] rounded-lg border border-border bg-raised px-4 py-2.5 text-sm text-text placeholder-placeholder outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all"
-                  />
-
-                  {/* Typeahead Dropdown */}
-                  {showArtistDropdown && debouncedArtistQuery && (
-                    <div className="absolute top-[48px] left-0 right-0 z-30 max-h-64 overflow-y-auto rounded-lg border border-border bg-panel shadow-medium divide-y divide-border">
-                      {isSearching ? (
-                        <div className="px-4 py-3 text-sm text-muted">Searching…</div>
-                      ) : artistMatches.length > 0 ? (
-                        artistMatches.map((m) => (
-                          <button
-                            key={m.name}
-                            type="button"
-                            onClick={() => handleSelectArtist(m.name)}
-                            className="flex w-full items-baseline justify-between px-4 py-3 text-left text-sm hover:bg-raised transition-colors focus:bg-raised focus:outline-none group"
-                          >
-                            <span className="font-medium text-text group-hover:text-accent transition-colors">{m.name}</span>
-                            <span className="text-muted text-xs truncate max-w-[200px]">
-                              {m.type}
-                            </span>
-                          </button>
-                        ))
-                      ) : (
-                        <div className="px-4 py-3 text-sm text-muted">
-                          No match found. Try another spelling.
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </section>
-
-          {/* 2. New Song */}
-          <section className="rounded-xl border border-border bg-panel p-5 space-y-4 shadow-soft">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">
-              2. New song
-            </h2>
-
-            {/* Dropzone / Active Song Card (h-[130px] fixed height to eliminate layout shift) */}
-            <div className="min-h-[130px]">
-              {songName ? (
-                <div className="h-[130px] rounded-lg border border-border-light bg-raised p-4 flex flex-col justify-between">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <span className="block text-sm font-medium text-text truncate max-w-sm">
-                        {songName}
-                      </span>
-                      <div className="flex items-center gap-2.5 mt-1">
-                        <span className="num text-xs text-muted">
-                          {duration ? formatTime(duration) : "0:30"}
-                        </span>
-                        {isSampleTrack && (
-                          <span className="rounded-md bg-surface border border-border px-2 py-0.5 text-2xs text-muted font-medium">
-                            sample
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleRemoveSong}
-                      className="text-xs text-muted hover:text-negative focus:outline-none focus:ring-2 focus:ring-accent rounded-md px-2 py-1"
-                    >
-                      Remove
+                <button onClick={changeArtist} className="text-small text-muted hover:text-text">Change</button>
+              </div>
+            ) : (
+              <div className="relative">
+                <input
+                  ref={artistInputRef}
+                  value={artistQuery}
+                  onChange={(e) => { setArtistQuery(e.target.value); setShowArtistDropdown(true); }}
+                  onFocus={() => { if (artistQuery.trim()) setShowArtistDropdown(true); }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && artistMatches.length > 0) { e.preventDefault(); selectArtist(artistMatches[0].name); }
+                    else if (e.key === "Escape") setShowArtistDropdown(false);
+                  }}
+                  placeholder="Search an artist…"
+                  className="h-12 w-full rounded-control border border-border bg-raised px-4 text-body text-text placeholder:text-muted outline-none focus:border-accent"
+                />
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {(config.sample_artists || []).slice(0, 3).map((a) => (
+                    <button key={a} onClick={() => selectArtist(a)} className="rounded-pill border border-border px-3 py-1 text-small text-muted hover:border-accent hover:text-text">
+                      Try: {a}
                     </button>
-                  </div>
-
-                  {/* Mini waveform representation */}
-                  <div className="flex items-center justify-between gap-3 pt-3">
-                    <MiniWaveform />
-                    <span className="num text-xs text-muted">Audio loaded</span>
-                  </div>
+                  ))}
                 </div>
-              ) : (
+                {showArtistDropdown && debouncedArtistQuery && (
+                  <div className="absolute left-0 right-0 top-[52px] z-30 max-h-56 overflow-y-auto rounded-control border border-border bg-panel divide-y divide-border" style={reduced ? undefined : { animation: "fade-up 160ms var(--ease-out)" }}>
+                    {isSearching ? (
+                      <div className="px-4 py-3 text-small text-muted">Searching…</div>
+                    ) : artistMatches.length > 0 ? (
+                      artistMatches.map((m) => (
+                        <button key={m.name} type="button" onClick={() => selectArtist(m.name)} className="flex w-full items-center justify-between px-4 py-2.5 text-left text-body hover:bg-raised">
+                          <span className="text-text">{m.name}</span>
+                          <span className="text-small text-muted">{m.type}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-4 py-3 text-small text-muted">No match found. Try another spelling.</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </FormSection>
+
+          <FormSection index="2" title="New song">
+            {songName ? (
+              <div className="flex items-center justify-between rounded-control border border-border bg-raised px-4 py-3">
+                <div className="min-w-0">
+                  <span className="block truncate text-body font-medium text-text">{songName}</span>
+                  {duration != null && <span className="num text-muted">{Math.floor(duration / 60)}:{String(duration % 60).padStart(2, "0")}</span>}
+                </div>
+                <button onClick={removeSong} className="text-small text-muted hover:text-text">Remove</button>
+              </div>
+            ) : (
+              <div>
                 <div
                   onClick={() => fileInputRef.current?.click()}
                   onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    const f = e.dataTransfer?.files?.[0];
-                    if (f) handleFileUpload(f);
-                  }}
-                  className="h-[130px] cursor-pointer rounded-lg border-2 border-dashed border-border bg-surface hover:border-accent hover:bg-accent-subtle p-4 flex flex-col items-center justify-center text-center transition-all focus:outline-none focus:ring-2 focus:ring-accent"
+                  onDrop={(e) => { e.preventDefault(); upload(e.dataTransfer.files?.[0]); }}
+                  className="flex h-24 cursor-pointer items-center justify-center rounded-control border border-dashed border-border bg-panel text-center text-small text-muted hover:border-accent"
                 >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".mp3,.wav,.m4a"
-                    className="hidden"
-                    onChange={(e) => handleFileUpload(e.target.files?.[0])}
-                  />
-
-                  <svg className="h-6 w-6 text-muted mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-
-                  <span className="text-sm font-medium text-text">
-                    {uploadBusy ? "Uploading track..." : "Drop a track here or browse"}
-                  </span>
-                  <span className="text-xs text-muted mt-1">
-                    MP3, WAV or M4A, up to 25 MB and 8 minutes
-                  </span>
+                  <div>
+                    <p>{uploadBusy ? "Uploading…" : "Drop a track here or browse"}</p>
+                    <p className="mt-0.5 text-muted">MP3 · WAV · M4A, 25 MB max</p>
+                  </div>
+                  <input ref={fileInputRef} type="file" accept=".mp3,.wav,.m4a" className="hidden" onChange={(e) => upload(e.target.files?.[0])} />
                 </div>
-              )}
-            </div>
+                {config.sample_tracks?.length > 0 && (
+                  <button onClick={useSample} className="mt-2 text-small text-accent hover:underline">Use a sample track</button>
+                )}
+              </div>
+            )}
+            <input
+              value={genre}
+              onChange={(e) => setGenre(e.target.value)}
+              placeholder="Genre (optional)"
+              className="mt-3 h-10 w-full rounded-control border border-border bg-raised px-3 text-body text-text placeholder:text-muted outline-none focus:border-accent"
+            />
+          </FormSection>
 
-            {/* Secondary Sample Button */}
-            {!songName && (
-              <div className="flex items-center gap-3">
+          <FormSection index="3" title={`Markets · ${cities.length} of 12`}>
+            <input
+              value={marketSearch}
+              onChange={(e) => setMarketSearch(e.target.value)}
+              placeholder="Search cities…"
+              className="mb-3 h-10 w-full rounded-control border border-border bg-raised px-3 text-body text-text placeholder:text-muted outline-none focus:border-accent"
+            />
+            <div className="flex flex-wrap gap-2">
+              {PRESETS.map((p) => (
                 <button
-                  type="button"
-                  onClick={handleUseSampleTrack}
-                  className="rounded-lg border border-border-light bg-surface px-4 py-2 text-sm text-text hover:border-accent hover:bg-accent-subtle transition-all focus:outline-none focus:ring-2 focus:ring-accent"
+                  key={p.label}
+                  onClick={() => selectPreset(p)}
+                  className={`rounded-pill border px-3 py-1 text-small ${activePreset === p.label ? "border-accent bg-accent/10 text-accent" : "border-border text-muted hover:border-accent"}`}
                 >
-                  Use a sample track
+                  {p.label}
                 </button>
-              </div>
-            )}
-
-            {/* Genre (optional) Input */}
-            <div className="space-y-2 pt-1">
-              <label htmlFor="genre-input" className="block text-sm font-medium text-text">
-                Genre <span className="text-muted font-normal">(optional)</span>
-              </label>
-              <input
-                id="genre-input"
-                value={genre}
-                onChange={(e) => setGenre(e.target.value)}
-                placeholder="e.g. Afrobeats"
-                className="w-full rounded-lg border border-border bg-raised px-4 py-2 text-sm text-text placeholder-placeholder outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all"
-              />
-              <p className="text-xs text-muted">Helps pick comparable artists</p>
+              ))}
             </div>
-
-            {/* Required rights checkbox (only for uploaded files, not required for samples) */}
-            {songName && !isSampleTrack && (
-              <div className="pt-2">
-                <label className="flex items-center gap-2.5 cursor-pointer text-sm text-muted select-none">
-                  <input
-                    type="checkbox"
-                    checked={rightsConfirmed}
-                    onChange={(e) => setRightsConfirmed(e.target.checked)}
-                    className="rounded border-border text-accent focus:ring-2 focus:ring-accent"
-                  />
-                  <span>I own this track or it is royalty free.</span>
-                </label>
-              </div>
-            )}
-          </section>
-
-          {/* 3. Candidate Markets */}
-          <section className="rounded-xl border border-border bg-panel p-5 space-y-4 shadow-soft">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">
-                3. Markets
-              </h2>
-              <span className="num text-xs text-muted">
-                {cities.length} of 12
-              </span>
-            </div>
-
-            {/* Presets Segmented Control & Search */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="inline-flex rounded-lg border border-border bg-raised p-1 text-xs">
-                {PRESETS.map((p) => {
-                  const isActive = activePreset === p.label;
-                  return (
-                    <button
-                      key={p.label}
-                      type="button"
-                      onClick={() => handleSelectPreset(p)}
-                      className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all focus:outline-none focus:ring-2 focus:ring-accent ${
-                        isActive
-                          ? "bg-surface text-text shadow-soft"
-                          : "text-muted hover:text-text hover:bg-surface/50"
-                      }`}
-                    >
-                      {p.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* City search field (min-width 200px) */}
-              <div className="min-w-[200px]">
-                <input
-                  value={marketSearch}
-                  onChange={(e) => setMarketSearch(e.target.value)}
-                  placeholder="Search cities..."
-                  className="w-full rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text placeholder-placeholder outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all"
-                />
-              </div>
-            </div>
-
-            {/* City Chips */}
-            <div className="flex flex-wrap gap-2 max-h-52 overflow-y-auto pt-1">
-              {displayedCities.map((item) => {
-                const isSelected = cities.includes(item.city);
+            <div className="mt-3 flex flex-wrap gap-2">
+              {displayedCities.map((c) => {
+                const on = cities.includes(c.city);
                 return (
                   <button
-                    key={item.city}
-                    type="button"
-                    onClick={() => toggleCity(item.city)}
-                    className={`rounded-full px-3.5 py-1.5 text-sm transition-all flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-accent ${
-                      isSelected
-                        ? "bg-accent/15 border border-accent text-text font-medium shadow-soft"
-                        : "border border-border text-muted hover:border-accent hover:text-text hover:bg-accent-subtle font-normal"
-                    }`}
+                    key={c.city}
+                    onClick={() => toggleCity(c.city)}
+                    className={`rounded-pill border px-3 py-1 text-small ${on ? "border-accent bg-accent/10 text-text" : "border-border text-muted hover:border-accent"}`}
                   >
-                    {isSelected && (
-                      <svg className="h-3.5 w-3.5 text-accent shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                    <span>{item.city}</span>
-                    {item.country && (
-                      <span className="text-xs text-muted/70">· {item.country}</span>
-                    )}
+                    {on && <span className="mr-1 text-accent">✓</span>}{c.city}
                   </button>
                 );
               })}
             </div>
-          </section>
-        </div>
+          </FormSection>
 
-        {/* Right column (Desktop 1100px+): Sticky 360px Preview Panel */}
-        <aside className="w-[360px] shrink-0 sticky top-6 self-start space-y-4 rounded-lg border border-border bg-panel p-4 desktop:block hidden">
-          {/* Mini Preview Globe (hidden under reduced motion) */}
-          {!reducedMotion ? (
-            <div className="h-[180px] rounded-md border border-border bg-raised overflow-hidden relative">
-              <GlobeContainer
-                markets={previewJoinedMarkets}
-                origin={null}
-                interactive={false}
-                height={180}
-              />
-              <span className="absolute bottom-1 right-2 text-[10px] num text-[#9AA0AC]">
-                {cities.length} market(s)
-              </span>
-            </div>
-          ) : (
-            <div className="h-[120px] rounded-md border border-border bg-raised p-3 flex flex-col justify-center text-center">
-              <span className="text-xs text-text font-medium">Selected Markets</span>
-              <span className="num text-xs text-[#9AA0AC] mt-1">{cities.join(", ")}</span>
-            </div>
-          )}
+          <div className="rounded-card border border-border bg-panel p-5">
+            <label className="flex items-center gap-2 text-small text-text">
+              <input type="checkbox" checked={hasRights} onChange={(e) => { if (!isSampleTrack) setRightsConfirmed(e.target.checked); }} className="accent-[#5B9DFF]" />
+              I own this track or it is royalty free
+            </label>
 
-          {/* Readiness Checklist */}
-          <div className="space-y-2 border-b border-border pb-3 text-xs">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#9AA0AC] block">
-              Readiness
-            </span>
-
-            <ul className="space-y-1.5">
-              <CheckItem label="Artist chosen" ready={hasArtist} />
-              <CheckItem label="Track ready" ready={hasTrack} />
-              <CheckItem label="Rights confirmed" ready={hasRights} />
-              <CheckItem label="Markets selected" ready={hasMarkets} />
-            </ul>
-          </div>
-
-          {/* Desktop Run Button */}
-          <div className="space-y-1.5">
-            <button
-              ref={runBtnRef}
-              type="button"
-              disabled={!isReady}
-              onClick={start}
-              className={`w-full py-2.5 rounded-md font-semibold text-sm transition-all text-center focus:outline-none focus:ring-2 focus:ring-accent ${
-                isReady
-                  ? "bg-[#5B9DFF] text-black hover:brightness-110 active:scale-98 cursor-pointer shadow-md"
-                  : "bg-raised border border-border text-[#9AA0AC] opacity-60 cursor-not-allowed"
-              }`}
-            >
-              Plan the release
-            </button>
-
-            {!isReady ? (
-              <p className="text-[11px] text-[#9AA0AC] text-center">
-                Missing: {missingItems.join(" · ")}
-              </p>
-            ) : (
-              <p className="text-[11px] text-[#9AA0AC] text-center num">
-                Press ⌘/Ctrl+Enter to run
-              </p>
-            )}
-          </div>
-
-          {/* What you'll get */}
-          <div className="pt-2 space-y-2 border-t border-border text-xs">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#9AA0AC] block">
-              What you'll get
-            </span>
-
-            <div className="space-y-1.5 text-xs text-[#9AA0AC]">
-              <div className="flex items-center gap-2">
-                <span className="text-text">•</span>
-                <span>Fit score (catalog overlap & affinity)</span>
+            <div className="mt-4 flex items-center justify-between">
+              <div className="text-small text-muted">
+                {isReady ? (
+                  <span className="flex items-center gap-1.5"><Check size={14} reduced={reduced} /> Ready</span>
+                ) : (
+                  <span>Missing: {missing.join(", ") || "—"}</span>
+                )}
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-text">•</span>
-                <span>Markets on a 3D globe</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-text">•</span>
-                <span>Clips with captions (15–30s hooks)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-text">•</span>
-                <span>Collaborators from Qloo taste graph</span>
-              </div>
+              <button
+                onClick={start}
+                disabled={!isReady}
+                className={`rounded-control px-6 py-2.5 text-body font-semibold transition-colors ${isReady ? "bg-accent text-black hover:brightness-110" : "cursor-not-allowed bg-raised text-muted"}`}
+              >
+                Plan the release
+              </button>
             </div>
           </div>
-        </aside>
-      </div>
-
-      {/* Sticky Bottom Bar for screens below 1100px */}
-      <div className="desktop:hidden fixed bottom-0 left-0 right-0 z-40 bg-panel/95 border-t border-border px-6 py-3 backdrop-blur-md">
-        <div className="mx-auto max-w-[1040px] flex items-center justify-between gap-4">
-          <div className="text-xs text-[#9AA0AC] truncate">
-            {!isReady ? (
-              <span>Missing: {missingItems.join(", ")}</span>
-            ) : (
-              <span className="text-positive font-medium">Ready to plan</span>
-            )}
-          </div>
-
-          <button
-            ref={mobileRunBtnRef}
-            type="button"
-            disabled={!isReady}
-            onClick={start}
-            className={`px-5 py-2 rounded-md font-semibold text-sm transition-all focus:outline-none focus:ring-1 focus:ring-accent ${
-              isReady
-                ? "bg-[#5B9DFF] text-black hover:brightness-110 active:scale-98"
-                : "bg-raised border border-border text-[#9AA0AC] opacity-60 cursor-not-allowed"
-            }`}
-          >
-            Plan the release
-          </button>
         </div>
       </div>
+
+      <HowItWorks reduced={reduced} />
+      <WhyQloo />
     </div>
   );
 }
 
-function CheckItem({ label, ready }) {
+function Hero({ reduced }) {
   return (
-    <li className="flex items-center justify-between text-xs">
-      <span className={ready ? "text-text" : "text-[#9AA0AC]"}>{label}</span>
-      {ready ? (
-        <span className="text-positive font-semibold">✓</span>
-      ) : (
-        <span className="text-[#7A808C]">○</span>
-      )}
-    </li>
+    <div className="space-y-6">
+      <p className="text-label text-muted">Agentic release planner</p>
+      <h1 className="text-display text-text">
+        {HEADLINE.map((word, i) => {
+          const isLand = word.toLowerCase().startsWith("land");
+          return (
+            <span key={i} className="inline-block" style={reduced ? undefined : { animation: `fade-up 420ms var(--ease-out) ${i * 70}ms both` }}>
+              {isLand ? (
+                <span className="relative inline-block">
+                  {word}
+                  <svg className="absolute -bottom-1 left-0 w-full" height="6" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true">
+                    <path d="M2 4 Q 50 -2 98 4" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round"
+                      style={reduced ? undefined : { strokeDasharray: 120, strokeDashoffset: 120, animation: `draw-stroke 400ms var(--ease-out) ${HEADLINE.length * 70}ms forwards` }} />
+                  </svg>
+                </span>
+              ) : (
+                word
+              )}
+              {i < HEADLINE.length - 1 ? " " : ""}
+            </span>
+          );
+        })}
+      </h1>
+      <p className="max-w-md text-body text-secondary">
+        Pick an artist, drop an unreleased track. An agent uses Qloo taste data to predict fit, markets, and clips.
+      </p>
+
+      <ArcStoryboard reduced={reduced} />
+      <WaveformBars reduced={reduced} />
+    </div>
   );
 }
 
-function MiniWaveform() {
-  const heights = [30, 45, 60, 80, 55, 70, 90, 100, 85, 75, 95, 65, 50, 70, 85, 60, 75, 90, 80, 65, 50, 40, 60, 75, 90, 85, 70, 55, 40, 25];
+function ArcStoryboard({ reduced }) {
+  const dur = reduced ? 0 : 1;
   return (
-    <svg className="h-5 w-36 text-accent shrink-0" viewBox="0 0 144 20" fill="currentColor">
-      {heights.map((h, i) => (
-        <rect
-          key={i}
-          x={i * 4.8}
-          y={(20 - (h / 100) * 16) / 2}
-          width="2.4"
-          height={(h / 100) * 16}
-          rx="1"
-        />
+    <svg viewBox="0 0 220 120" className="h-28 w-52" aria-hidden="true">
+      <path
+        d="M10 105 Q 110 10 210 105"
+        fill="none" stroke="var(--border)" strokeWidth="3" strokeLinecap="round"
+        style={reduced ? undefined : { strokeDasharray: 400, strokeDashoffset: 400, animation: `draw-stroke 700ms var(--ease-out) ${dur}ms forwards` }}
+      />
+      <path
+        d="M10 105 Q 110 10 210 105"
+        fill="none" stroke="var(--accent)" strokeWidth="3" strokeLinecap="round"
+        style={reduced ? undefined : { strokeDasharray: 400, strokeDashoffset: 400, animation: `draw-stroke 700ms var(--ease-out) 0ms forwards` }}
+      />
+      <circle cx="110" cy="34" r="4" fill="var(--positive)"
+        style={reduced ? undefined : { animation: "scale-pop 240ms var(--ease-out) 700ms both" }} />
+      {[0, 1, 2].map((i) => (
+        <circle key={i} cx="110" cy="34" r="4" fill="none" stroke="var(--positive)" strokeWidth="1"
+          style={reduced ? undefined : { transformBox: "fill-box", transformOrigin: "center", animation: `ripple 1400ms ease-out ${950 + i * 120}ms infinite` }} />
       ))}
+    </svg>
+  );
+}
+
+function WaveformBars({ reduced }) {
+  const heights = [0.3, 0.6, 0.45, 0.9, 0.5, 0.75, 0.4, 0.85, 0.55, 0.7, 0.35, 0.8, 0.5, 0.65, 0.4, 0.6, 0.5, 0.7, 0.3, 0.8, 0.45, 0.6, 0.5, 0.75, 0.35, 0.65, 0.5, 0.7, 0.4, 0.85, 0.5, 0.6, 0.45, 0.7, 0.3, 0.75, 0.5, 0.65, 0.4, 0.8, 0.55, 0.6, 0.45, 0.7, 0.35, 0.75, 0.5, 0.6];
+  return (
+    <div className="flex h-8 items-end gap-0.5 opacity-20" aria-hidden="true">
+      {heights.map((h, i) => (
+        <span key={i} className="w-1 rounded-sm bg-accent" style={{ height: `${h * 100}%`, animation: reduced ? undefined : `waveform 2.4s ease-in-out ${i * 0.05}s infinite` }} />
+      ))}
+    </div>
+  );
+}
+
+function HowItWorks({ reduced }) {
+  const [ref, inView] = useInView(true);
+  const steps = [
+    { n: "1", title: "Listen", body: "The agent reads your track — tempo, key, energy." },
+    { n: "2", title: "Translate", body: "Sound becomes plain descriptors and taste tags." },
+    { n: "3", title: "Ask Qloo", body: "Taste data resolves artists, places, and audiences." },
+    { n: "4", title: "Plan", body: "Fit, markets, clips, and a release strategy." },
+  ];
+  return (
+    <section ref={ref} className="mt-20 border-t border-border pt-12">
+      <h2 className="text-h2 font-semibold text-text">How it works</h2>
+      <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        {steps.map((s, i) => (
+          <div key={s.n} className="relative rounded-card border border-border bg-panel p-5"
+            style={reduced || !inView ? undefined : { animation: `fade-up 420ms var(--ease-out) ${i * 150}ms both` }}>
+            <span className="num text-muted">{s.n}</span>
+            <h3 className="mt-2 text-body font-semibold text-text">{s.title}</h3>
+            <p className="mt-1 text-small text-secondary">{s.body}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function WhyQloo() {
+  return (
+    <section className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-2">
+      <div className="rounded-card border border-border bg-panel p-6">
+        <h3 className="text-body font-semibold text-text">A plain LLM can guess a city.</h3>
+        <p className="mt-2 text-small text-secondary">Landfall shows the Qloo calls behind every number — affinity, not hallucination.</p>
+      </div>
+      <div className="rounded-card border border-border bg-panel p-6">
+        <h3 className="text-body font-semibold text-text">See it for yourself.</h3>
+        <p className="mt-2 text-small text-secondary">Run a plan, then compare it side by side with a plain LLM.</p>
+      </div>
+    </section>
+  );
+}
+
+function FormSection({ index, title, children }) {
+  return (
+    <section className="rounded-card border border-border bg-panel p-5">
+      <div className="mb-3 flex items-center gap-3">
+        <span className="num text-muted">{index}</span>
+        <h2 className="text-label text-muted">{title}</h2>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Check({ size = 14, reduced }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" className="shrink-0 text-positive" aria-hidden="true">
+      <path d="M2 7.5 L5.5 11 L12 3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+        style={reduced ? undefined : { strokeDasharray: 16, strokeDashoffset: 16, animation: "check-draw 200ms var(--ease-out) forwards" }} />
     </svg>
   );
 }
