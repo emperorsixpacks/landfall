@@ -27,6 +27,13 @@ def _overlap(comparable_tags: list[str], profile_tags: list[str]):
     return round(_jaccard(a, b) * 100.0, 1)
 
 
+def _mean_affinity(scores: list[float]):
+    s = [x for x in scores if x is not None]
+    if not s:
+        return None
+    return round(sum(s) / len(s) * 100.0, 1)
+
+
 def catalog_match(comparable_tags, catalog_tags):
     return _overlap(comparable_tags, catalog_tags)
 
@@ -45,15 +52,29 @@ def clip_strength(hooks: list[dict]):
 
 
 def score_fit(evidence: dict) -> dict:
-    """evidence: {comparable_tags, catalog_tags, audience_tags, hooks}"""
+    """evidence: {comparable_tags, catalog_tags, audience_tags, related_affinity, hooks}"""
     comparable_tags = evidence.get("comparable_tags", [])
-    parts = {
-        "catalog_match": catalog_match(comparable_tags, evidence.get("catalog_tags", [])),
-        "audience_match": audience_match(comparable_tags, evidence.get("audience_tags", [])),
-    }
+    catalog_tags = evidence.get("catalog_tags", [])
+    audience_tags = evidence.get("audience_tags", [])
+    related_affinity = evidence.get("related_affinity", [])
     cs = clip_strength(evidence.get("hooks", []))
 
-    warnings = [f"{k} unavailable" for k, v in parts.items() if v is None]
+    warnings: list[str] = []
+    if comparable_tags:
+        # Song present: compare the song's "sounds-like" tags to catalog & audience.
+        parts = {
+            "catalog_match": catalog_match(comparable_tags, catalog_tags),
+            "audience_match": audience_match(comparable_tags, audience_tags),
+        }
+    else:
+        # No song: fall back to Qloo-only audience alignment (always available).
+        parts = {
+            "catalog_match": _overlap(catalog_tags, audience_tags),
+            "audience_match": _mean_affinity(related_affinity),
+        }
+        warnings.append("no song uploaded — using Qloo audience alignment")
+
+    warnings += [f"{k} unavailable" for k, v in parts.items() if v is None]
     if cs is None:
         warnings.append("clip strength unavailable")
 
@@ -75,21 +96,29 @@ def score_fit(evidence: dict) -> dict:
         "fit": fit,
         "breakdown": {k: (round(v, 1) if v is not None else None) for k, v in parts.items()},
         "clip_strength": cs,
-        "explanation": _explain(parts, cs, warnings),
+        "explanation": _explain(parts, cs, warnings, bool(comparable_tags)),
         "warnings": warnings,
     }
 
 
-def _explain(parts: dict, cs, warnings: list[str]) -> str:
+def _explain(parts: dict, cs, warnings: list[str], has_song: bool) -> str:
     sents = []
     cm = parts.get("catalog_match")
     am = parts.get("audience_match")
     if cm is not None:
-        sents.append(f"Catalog match is {cm:.0f}/100, from tag overlap between the song's comparables and the artist's catalog profile.")
+        sents.append(
+            f"Catalog match is {cm:.0f}/100, from tag overlap between the song's comparables and the artist's catalog profile."
+            if has_song
+            else f"Catalog match is {cm:.0f}/100, from tag overlap between the artist's catalog and their audience profile."
+        )
     if am is not None:
-        sents.append(f"Audience match is {am:.0f}/100, from tag overlap between the song's comparables and the audience profile.")
+        sents.append(
+            f"Audience match is {am:.0f}/100, from tag overlap between the song's comparables and the audience profile."
+            if has_song
+            else f"Audience match is {am:.0f}/100, from the mean Qloo affinity of the artist's related artists."
+        )
     if cs is not None:
         sents.append(f"Clip strength is {cs:.0f}/100, from the strongest 15-30 second window.")
     for w in warnings:
-        sents.append(f"{w.capitalize()} was unavailable and excluded from the score.")
+        sents.append(f"{w.capitalize()}.")
     return " ".join(sents)

@@ -423,6 +423,7 @@ async def _finish(state: dict, request: dict):
             "comparable_tags": comparable_tags,
             "catalog_tags": catalog_names,
             "audience_tags": audience_names,
+            "related_affinity": [e.get("score") for e in state.get("related_entities", []) if e.get("score") is not None],
             "hooks": (state["audio"] or {}).get("hooks") or [],
         }
     )
