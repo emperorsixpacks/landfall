@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from typing import Any
 
@@ -55,6 +56,7 @@ def _new_state(request: dict) -> dict:
 
 
 def _summary(state: dict) -> str:
+    done = ", ".join(sorted(state.get("called_tools", []))) or "(none yet)"
     parts = [
         f"artist={state.get('artist_name')}",
         f"song={state.get('song_id') or 'none'}",
@@ -63,6 +65,7 @@ def _summary(state: dict) -> str:
         f"audio={'yes' if state.get('audio') else 'no'}",
         f"sound={'yes' if state.get('sound') else 'no'}",
         f"clips={len(state.get('clips', []))}",
+        f"tools_called=[{done}]",
     ]
     return "; ".join(parts)
 
@@ -79,6 +82,7 @@ async def run_agent(request: dict):
         yield ev
 
     last_results: list[str] = []
+    stalls = 0
 
     for step in range(config.MAX_STEPS):
         if time.monotonic() - t0 > config.TIME_BUDGET_SECONDS:
@@ -87,7 +91,7 @@ async def run_agent(request: dict):
         if not llm.config.llm_ready():
             break
 
-        messages = _messages(state, last_results, config.MAX_STEPS - step)
+        messages = _messages(state, last_results, config.MAX_STEPS - step, _next_action(state, request))
         decision = await asyncio.to_thread(
             llm.chat_json, messages, 0.0, 2, {"final": True}
         )
@@ -113,9 +117,27 @@ async def run_agent(request: dict):
             state["errors"].append(f"invalid tool call: {tool_name} {errors}")
             yield _event(step, stage, tool_name, why, args, f"invalid: {errors}", "error")
             last_results.append(f"{tool_name} invalid: {errors}")
+            stalls += 1
+            if stalls >= 3:
+                break
             continue
 
+        # Hard no-repeat guard: reject an identical call with the same args.
+        call_key = _call_key(tool_name, args)
+        if call_key in state.setdefault("called", set()):
+            ev = _event(step, stage, tool_name, why, args, "duplicate call — pick a different action", "fallback")
+            state.setdefault("trace", []).append(ev["event"])
+            yield ev
+            last_results.append(f"{tool_name} duplicate call, skipped")
+            last_results = last_results[-3:]
+            stalls += 1
+            if stalls >= 3:
+                break
+            continue
+        state["called"].add(call_key)
+
         summary, ev = await _exec(tool_name, args, state, stage, why, step)
+        stalls = 0
         yield ev
         last_results.append(summary)
         last_results = last_results[-3:]
@@ -136,6 +158,8 @@ async def _exec(tool_name, args, state, stage, why="", step=0):
         status = "error"
     latency = int((time.monotonic() - t0) * 1000)
     state["steps_used"] += 1
+    state.setdefault("called_tools", []).append(tool_name)
+    state.setdefault("called", set()).add(_call_key(tool_name, args))
     event = _event(step, stage, tool_name, why, args, summary, status, latency)
     state.setdefault("trace", []).append(event["event"])
     return summary, event
@@ -162,28 +186,94 @@ def _short(v: Any, limit: int = 80) -> str:
     return s if len(s) <= limit else s[: limit - 1] + "…"
 
 
-def _messages(state, last_results, steps_left):
+def _tool_reference() -> str:
+    lines = ["Available tools (reply with exactly one of these):"]
+    for name, schema in tools.TOOL_SCHEMAS.items():
+        parts = []
+        for field, spec in schema["args"].items():
+            t = spec.get("type")
+            req = "required" if spec.get("required") else "optional"
+            extra = f" one of {spec['choices']}" if spec.get("choices") else ""
+            parts.append(f"{field}:{t}({req}{extra})")
+        lines.append(f"- {name}({', '.join(parts)}) — {schema['description']}")
+    return "\n".join(lines)
+
+
+FLOW_HINT = (
+    "Stage order: 1 IDENTIFY (find_artist, then qloo_search for the artist, top songs, "
+    "related artists) 2 PROFILE (qloo_audience) 3 LISTEN (analyze_audio, only if a song "
+    "was uploaded) 4 COMPARE (describe_sound) 5 TARGET (qloo_insights per market, then "
+    "collaborators) 6 CLIP (cut_clips, write_captions) 7 SCORE (reply final). Never "
+    "repeat an identical call. If a lookup is empty, try one variant spelling, then move on."
+)
+
+_SYSTEM = SYSTEM_PROMPT + "\n\n" + _tool_reference() + "\n\n" + FLOW_HINT
+
+
+def _next_action(state: dict, request: dict):
+    if state.get("artist_name") and not state.get("entities"):
+        return ("qloo_search", {"name": state["artist_name"], "type": "artist"})
+    if state.get("entities") and not state.get("audience", {}).get("tags"):
+        return ("qloo_audience", {})
+    if state.get("song_id") and not state.get("audio"):
+        return ("analyze_audio", {"song_id": state["song_id"]})
+    if state.get("audio") and state["audio"].get("ok") and not state.get("sound"):
+        return ("describe_sound", {"features": state["audio"]})
+    if state.get("artist_name") and not state.get("origin"):
+        return ("find_home_city", {})
+    return None
+
+
+def _canon(v: Any) -> Any:
+    if isinstance(v, dict):
+        return {k: _canon(val) for k, val in sorted(v.items())}
+    if isinstance(v, list):
+        return [_canon(x) for x in v]
+    if isinstance(v, str):
+        return v.lower()
+    return v
+
+
+def _call_key(tool_name: str, args: dict):
+    return (tool_name, json.dumps(_canon(args), sort_keys=True, default=str))
+
+
+def _messages(state, last_results, steps_left, next_action):
+    hint = ""
+    if next_action:
+        hint = f"Suggested next: call {next_action[0]} with args {json.dumps(next_action[1])} (or a better choice)."
     user = (
         f"Scratchpad: {_summary(state)}\n"
         f"Last tool results: {last_results or '(none yet)'}\n"
+        f"{hint}\n"
         f"Steps remaining: {steps_left}. Reply with ONE JSON object: "
         '{"tool": "...", "args": {...}, "why": "..."} or {"final": true}.'
     )
     return [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": _SYSTEM},
         {"role": "user", "content": user},
     ]
 
 
 def _retry_messages(messages, errors, decision):
+    valid = ", ".join(tools.TOOL_SCHEMAS.keys())
     return messages + [
         {"role": "assistant", "content": str(decision)},
-        {"role": "user", "content": f"Invalid args: {errors}. Return a corrected JSON object."},
+        {"role": "user", "content": f"Invalid: {errors}. Valid tools are: {valid}. Return a corrected JSON object."},
     ]
+
+
+def _trace_event(state, tool, stage, args, summary, status="ok", why=""):
+    ev = _event(state["steps_used"], stage, tool, why, args, summary, status, None)
+    state.setdefault("trace", []).append(ev["event"])
+    return {"type": "event", "event": ev["event"]}
 
 
 # --- deterministic FINISH -----------------------------------------------------
 async def _finish(state: dict, request: dict):
+    def tr(tool, stage, args, summary, status="ok", why=""):
+        return _trace_event(state, tool, stage, args, summary, status, why)
+
     artist_entity = tools._find_artist_entity(state)
     if artist_entity:
         state["catalog"]["artist_entity"] = artist_entity
@@ -196,6 +286,9 @@ async def _finish(state: dict, request: dict):
             artist_entity = {"name": c0["name"], "id": c0["id"], "type": "artist", "score": c0.get("score")}
             state["entities"].append(artist_entity)
             state["catalog"]["artist_entity"] = artist_entity
+            yield tr("qloo_search", "IDENTIFY", {"name": state["artist_name"]}, f"Searched Qloo for '{state['artist_name']}', picked '{c0['name']}'.")
+        else:
+            yield tr("qloo_search", "IDENTIFY", {"name": state["artist_name"]}, f"No Qloo match for '{state['artist_name']}'.", "error")
 
     # Resolve related artists in Qloo (for catalog + collaborators).
     if artist_entity:
@@ -204,6 +297,7 @@ async def _finish(state: dict, request: dict):
             for e in rel["entities"]:
                 e["type"] = "artist"
             state.setdefault("related_entities", []).extend(rel["entities"])
+            yield tr("qloo_insights", "IDENTIFY", {"type": "artist"}, f"Related artists: {len(rel['entities'])} result(s).")
 
     # PROFILE: audience tags + demographics (deterministic).
     if artist_entity and not state["audience"]["tags"]:
@@ -213,24 +307,31 @@ async def _finish(state: dict, request: dict):
         d = qloo.demographics(artist_entity["id"])
         if d["ok"]:
             state["audience"]["demographics"] = d["demographics"]
+        yield tr("qloo_audience", "PROFILE", {}, f"Audience profile: {len(state['audience']['tags'])} tags.")
 
     # Catalog tags = artist taste tags + related-entity tags.
     catalog_tags = list(state["audience"]["tags"])
 
     # LISTEN: analyze audio (deterministic) if a song was provided.
     if state["song_id"] and not state.get("audio"):
-        state["audio"] = audio.analyze(state["song_id"])
-        if not state["audio"].get("ok"):
-            state["errors"].append(f"analyze_audio skipped: {state['audio'].get('error')}")
+        res = audio.analyze(state["song_id"])
+        if res.get("ok"):
+            state["audio"] = res
+            yield tr("analyze_audio", "LISTEN", {"song_id": state["song_id"]}, f"Audio analyzed: {res['tempo']} BPM, key {res['key']} {res['mode']}.")
+        else:
+            state["errors"].append(f"analyze_audio skipped: {res.get('error')}")
             state["audio"] = None
+            yield tr("analyze_audio", "LISTEN", {"song_id": state["song_id"]}, f"Audio analysis skipped: {res.get('error')}", "error")
 
     # COMPARE: describe sound + resolve comparables.
     if state.get("audio") and state["audio"].get("ok") and not state.get("sound"):
         tools._describe_sound({"features": state["audio"]}, state)
+        yield tr("describe_sound", "COMPARE", {}, f"Sound described with {len((state.get('sound') or {}).get('descriptors', []))} descriptor(s).")
 
     # Origin (home city) for the globe's arcs — best-effort if the agent skipped it.
     if state["artist_name"] and not state.get("origin"):
-        tools._find_home_city({}, state)
+        msg = tools._find_home_city({}, state)
+        yield tr("find_home_city", "IDENTIFY", {}, msg)
 
     # TARGET: markets (heatmap, streamed as market_scored) + collaborators.
     state["markets"] = []
@@ -281,14 +382,20 @@ async def _finish(state: dict, request: dict):
             for c in state["cities"]
         ]
     state["collaborators"] = _collaborators(state, artist_entity)
+    if state["collaborators"]:
+        names = ", ".join(c["name"] for c in state["collaborators"][:5])
+        yield tr("qloo_insights", "TARGET", {"type": "artist"}, f"Collaborators: {names}.")
 
     # CLIP: cut clips + captions.
     if state.get("audio") and state["audio"].get("ok"):
         hooks = state["audio"].get("hooks") or []
         if hooks and not state["clips"]:
             state["clips"] = (audio.cut_clips(state["song_id"], hooks).get("clips") or [])
+            if state["clips"]:
+                yield tr("cut_clips", "CLIP", {"song_id": state["song_id"]}, f"Cut {len(state['clips'])} hook clip(s).")
         if state["clips"]:
             tools._write_captions({"clips": state["clips"], "audience_profile": state["audience"]}, state)
+            yield tr("write_captions", "CLIP", {}, f"Wrote {len(state['clips'])} caption(s).")
 
     # SCORE: fit score (pure code) + blurb (LLM, from evidence only).
     song_tags = _song_tags(state)

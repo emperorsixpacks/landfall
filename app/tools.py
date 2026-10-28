@@ -6,6 +6,7 @@ never raise into the loop.
 """
 from __future__ import annotations
 
+import uuid
 from typing import Any, Callable
 
 import rapidfuzz
@@ -230,15 +231,35 @@ def _qloo_insights(args, state) -> str:
     return f"qloo_insights ({args['type']}): {len(ents)} result(s) — {top}."
 
 
+def _is_uuid(s) -> bool:
+    try:
+        uuid.UUID(str(s))
+        return True
+    except (ValueError, TypeError, AttributeError):
+        return False
+
+
 def _qloo_audience(args, state) -> str:
-    ids = args.get("entities") or []
+    artist_entity = _find_artist_entity(state)
+    ids: list[str] = []
+    if artist_entity and artist_entity.get("id"):
+        ids.append(artist_entity["id"])
+
+    for e in (args.get("entities") or []):
+        if isinstance(e, str) and _is_uuid(e) and e not in ids:
+            ids.append(e)
+
+    # Resolve any provided names to ids so the model can't pass freeform strings.
+    for e in (args.get("entities") or []):
+        if isinstance(e, str) and not _is_uuid(e):
+            r = qloo.search(e, [TYPE_MAP["artist"]])
+            if r.get("candidates"):
+                cid = r["candidates"][0]["id"]
+                if cid and cid not in ids:
+                    ids.append(cid)
+
     if not ids:
-        artist_entity = _find_artist_entity(state)
-        if artist_entity and artist_entity.get("id"):
-            ids = [artist_entity["id"]]
-    tags = args.get("tags") or []
-    if not ids and not tags:
-        return "qloo_audience needs an entity or tag; nothing resolved yet."
+        return "qloo_audience has no resolved entity to profile yet; call qloo_search first."
 
     profile_tags = []
     for eid in ids:
