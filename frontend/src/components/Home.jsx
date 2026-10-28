@@ -47,13 +47,16 @@ export default function Home({ config, allCities = [], onRun, onError }) {
 
   // Live artist search (YouTube Music), debounced — no hardcoded directory.
   const [artistMatches, setArtistMatches] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     if (!debouncedArtistQuery) {
       setArtistMatches([]);
+      setIsSearching(false);
       return;
     }
+    setIsSearching(true);
     fetch(`/api/artists/search?q=${encodeURIComponent(debouncedArtistQuery)}`)
       .then((r) => r.json())
       .then((list) => {
@@ -61,6 +64,9 @@ export default function Home({ config, allCities = [], onRun, onError }) {
       })
       .catch(() => {
         if (!cancelled) setArtistMatches([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsSearching(false);
       });
     return () => {
       cancelled = true;
@@ -253,20 +259,20 @@ export default function Home({ config, allCities = [], onRun, onError }) {
   return (
     <div className="space-y-8">
       {/* HERO SECTION */}
-      <div className="space-y-3">
-        <h1 className="text-[32px] font-semibold leading-tight text-text tracking-tight">
+      <div className="space-y-4">
+        <h1 className="text-[36px] font-semibold leading-tight text-text tracking-tight">
           Where will your next song land?
         </h1>
-        <p className="text-[16px] text-[#9AA0AC] leading-relaxed max-w-2xl">
+        <p className="text-base text-text-secondary leading-relaxed max-w-2xl">
           Pick an artist, drop an unreleased track, and an agent uses Qloo taste data
           to predict audience fit, the best markets, and the clip to post.
         </p>
 
-        <div className="pt-1">
+        <div className="pt-2">
           <button
             type="button"
             onClick={handleTryExample}
-            className="rounded-md border border-border px-3.5 py-1.5 text-xs font-medium text-text hover:border-accent hover:text-accent transition-colors focus:outline-none focus:ring-1 focus:ring-accent"
+            className="rounded-lg border border-border-light bg-surface px-4 py-2 text-sm font-medium text-text hover:border-accent hover:bg-accent-subtle transition-all focus:outline-none focus:ring-2 focus:ring-accent"
           >
             Try an example
           </button>
@@ -278,19 +284,19 @@ export default function Home({ config, allCities = [], onRun, onError }) {
         {/* Left column: Form sections */}
         <div className="flex-1 min-w-0 space-y-6">
           {/* 1. Artist Typeahead */}
-          <section className="rounded-lg border border-border bg-panel p-4 space-y-3">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-[#9AA0AC]">
+          <section className="rounded-xl border border-border bg-panel p-5 space-y-4 shadow-soft">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">
               1. Artist
             </h2>
 
             {/* Fixed height container to prevent layout shift */}
-            <div className="relative min-h-[42px]">
+            <div className="relative min-h-[44px]">
               {resolvedArtist ? (
-                <div className="flex h-[42px] items-center justify-between rounded-md border border-border bg-raised px-3.5">
-                  <div className="flex items-center gap-2">
+                <div className="flex h-[44px] items-center justify-between rounded-lg border border-border-light bg-raised px-4">
+                  <div className="flex items-center gap-2.5">
                     <span className="text-sm font-semibold text-text">{resolvedArtist}</span>
-                    <span className="flex items-center gap-1 text-xs text-positive font-medium">
-                      <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                    <span className="flex items-center gap-1.5 text-xs text-positive font-medium">
+                      <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
                       <span>Found in Qloo</span>
@@ -299,7 +305,7 @@ export default function Home({ config, allCities = [], onRun, onError }) {
                   <button
                     type="button"
                     onClick={handleChangeArtist}
-                    className="text-xs text-[#5B9DFF] hover:underline focus:outline-none focus:ring-1 focus:ring-accent rounded-sm"
+                    className="text-xs text-accent hover:text-accent-hover font-medium focus:outline-none focus:ring-2 focus:ring-accent rounded-md px-2 py-1"
                   >
                     Change
                   </button>
@@ -327,28 +333,30 @@ export default function Home({ config, allCities = [], onRun, onError }) {
                       }
                     }}
                     placeholder="Search an artist, e.g. Tems"
-                    className="w-full h-[42px] rounded-md border border-border bg-raised px-3 py-2 text-sm text-text placeholder-[#7A808C] outline-none focus:ring-1 focus:ring-accent focus:border-accent transition-colors"
+                    className="w-full h-[44px] rounded-lg border border-border bg-raised px-4 py-2.5 text-sm text-text placeholder-placeholder outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all"
                   />
 
                   {/* Typeahead Dropdown */}
                   {showArtistDropdown && debouncedArtistQuery && (
-                    <div className="absolute top-[46px] left-0 right-0 z-30 max-h-56 overflow-y-auto rounded-md border border-border bg-panel shadow-xl divide-y divide-border/60">
-                      {artistMatches.length > 0 ? (
+                    <div className="absolute top-[48px] left-0 right-0 z-30 max-h-64 overflow-y-auto rounded-lg border border-border bg-panel shadow-medium divide-y divide-border">
+                      {isSearching ? (
+                        <div className="px-4 py-3 text-sm text-muted">Searching…</div>
+                      ) : artistMatches.length > 0 ? (
                         artistMatches.map((m) => (
                           <button
                             key={m.name}
                             type="button"
                             onClick={() => handleSelectArtist(m.name)}
-                            className="flex w-full items-baseline justify-between px-3.5 py-2 text-left text-xs hover:bg-raised transition-colors focus:bg-raised focus:outline-none"
+                            className="flex w-full items-baseline justify-between px-4 py-3 text-left text-sm hover:bg-raised transition-colors focus:bg-raised focus:outline-none group"
                           >
-                            <span className="font-medium text-text">{m.name}</span>
-                            <span className="text-[#9AA0AC] text-[11px] truncate max-w-[200px]">
+                            <span className="font-medium text-text group-hover:text-accent transition-colors">{m.name}</span>
+                            <span className="text-muted text-xs truncate max-w-[200px]">
                               {m.type}
                             </span>
                           </button>
                         ))
                       ) : (
-                        <div className="px-3.5 py-2.5 text-xs text-[#9AA0AC]">
+                        <div className="px-4 py-3 text-sm text-muted">
                           No match found. Try another spelling.
                         </div>
                       )}
@@ -360,26 +368,26 @@ export default function Home({ config, allCities = [], onRun, onError }) {
           </section>
 
           {/* 2. New Song */}
-          <section className="rounded-lg border border-border bg-panel p-4 space-y-3">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-[#9AA0AC]">
+          <section className="rounded-xl border border-border bg-panel p-5 space-y-4 shadow-soft">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">
               2. New song
             </h2>
 
-            {/* Dropzone / Active Song Card (h-[120px] fixed height to eliminate layout shift) */}
-            <div className="min-h-[120px]">
+            {/* Dropzone / Active Song Card (h-[130px] fixed height to eliminate layout shift) */}
+            <div className="min-h-[130px]">
               {songName ? (
-                <div className="h-[120px] rounded-md border border-border bg-raised p-3.5 flex flex-col justify-between">
+                <div className="h-[130px] rounded-lg border border-border-light bg-raised p-4 flex flex-col justify-between">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <span className="block text-sm font-medium text-text truncate max-w-sm">
                         {songName}
                       </span>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="num text-xs text-[#9AA0AC]">
+                      <div className="flex items-center gap-2.5 mt-1">
+                        <span className="num text-xs text-muted">
                           {duration ? formatTime(duration) : "0:30"}
                         </span>
                         {isSampleTrack && (
-                          <span className="rounded bg-panel border border-border px-1.5 py-0.2 text-[10px] text-[#9AA0AC]">
+                          <span className="rounded-md bg-surface border border-border px-2 py-0.5 text-2xs text-muted font-medium">
                             sample
                           </span>
                         )}
@@ -389,16 +397,16 @@ export default function Home({ config, allCities = [], onRun, onError }) {
                     <button
                       type="button"
                       onClick={handleRemoveSong}
-                      className="text-xs text-[#9AA0AC] hover:text-red-400 focus:outline-none focus:ring-1 focus:ring-accent rounded-sm"
+                      className="text-xs text-muted hover:text-negative focus:outline-none focus:ring-2 focus:ring-accent rounded-md px-2 py-1"
                     >
                       Remove
                     </button>
                   </div>
 
                   {/* Mini waveform representation */}
-                  <div className="flex items-center justify-between gap-3 pt-2">
+                  <div className="flex items-center justify-between gap-3 pt-3">
                     <MiniWaveform />
-                    <span className="num text-[11px] text-[#9AA0AC]">Audio loaded</span>
+                    <span className="num text-xs text-muted">Audio loaded</span>
                   </div>
                 </div>
               ) : (
@@ -410,7 +418,7 @@ export default function Home({ config, allCities = [], onRun, onError }) {
                     const f = e.dataTransfer?.files?.[0];
                     if (f) handleFileUpload(f);
                   }}
-                  className="h-[120px] cursor-pointer rounded-md border border-dashed border-border bg-panel hover:border-accent p-3.5 flex flex-col items-center justify-center text-center transition-colors focus:outline-none focus:ring-1 focus:ring-accent"
+                  className="h-[130px] cursor-pointer rounded-lg border-2 border-dashed border-border bg-surface hover:border-accent hover:bg-accent-subtle p-4 flex flex-col items-center justify-center text-center transition-all focus:outline-none focus:ring-2 focus:ring-accent"
                 >
                   <input
                     ref={fileInputRef}
@@ -420,14 +428,14 @@ export default function Home({ config, allCities = [], onRun, onError }) {
                     onChange={(e) => handleFileUpload(e.target.files?.[0])}
                   />
 
-                  <svg className="h-5 w-5 text-[#9AA0AC] mb-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="h-6 w-6 text-muted mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                   </svg>
 
-                  <span className="text-xs font-medium text-text">
+                  <span className="text-sm font-medium text-text">
                     {uploadBusy ? "Uploading track..." : "Drop a track here or browse"}
                   </span>
-                  <span className="text-[11px] text-[#9AA0AC] mt-0.5">
+                  <span className="text-xs text-muted mt-1">
                     MP3, WAV or M4A, up to 25 MB and 8 minutes
                   </span>
                 </div>
@@ -440,7 +448,7 @@ export default function Home({ config, allCities = [], onRun, onError }) {
                 <button
                   type="button"
                   onClick={handleUseSampleTrack}
-                  className="rounded-md border border-border bg-raised px-3 py-1.5 text-xs text-text hover:border-accent transition-colors focus:outline-none focus:ring-1 focus:ring-accent"
+                  className="rounded-lg border border-border-light bg-surface px-4 py-2 text-sm text-text hover:border-accent hover:bg-accent-subtle transition-all focus:outline-none focus:ring-2 focus:ring-accent"
                 >
                   Use a sample track
                 </button>
@@ -448,29 +456,29 @@ export default function Home({ config, allCities = [], onRun, onError }) {
             )}
 
             {/* Genre (optional) Input */}
-            <div className="space-y-1 pt-1">
-              <label htmlFor="genre-input" className="block text-xs font-medium text-text">
-                Genre <span className="text-[#9AA0AC] font-normal">(optional)</span>
+            <div className="space-y-2 pt-1">
+              <label htmlFor="genre-input" className="block text-sm font-medium text-text">
+                Genre <span className="text-muted font-normal">(optional)</span>
               </label>
               <input
                 id="genre-input"
                 value={genre}
                 onChange={(e) => setGenre(e.target.value)}
                 placeholder="e.g. Afrobeats"
-                className="w-full rounded-md border border-border bg-raised px-3 py-1.5 text-xs text-text placeholder-[#7A808C] outline-none focus:ring-1 focus:ring-accent focus:border-accent transition-colors"
+                className="w-full rounded-lg border border-border bg-raised px-4 py-2 text-sm text-text placeholder-placeholder outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all"
               />
-              <p className="text-[11px] text-[#9AA0AC]">Helps pick comparable artists</p>
+              <p className="text-xs text-muted">Helps pick comparable artists</p>
             </div>
 
             {/* Required rights checkbox (only for uploaded files, not required for samples) */}
             {songName && !isSampleTrack && (
               <div className="pt-2">
-                <label className="flex items-center gap-2 cursor-pointer text-xs text-[#9AA0AC] select-none">
+                <label className="flex items-center gap-2.5 cursor-pointer text-sm text-muted select-none">
                   <input
                     type="checkbox"
                     checked={rightsConfirmed}
                     onChange={(e) => setRightsConfirmed(e.target.checked)}
-                    className="rounded border-border accent-[#5B9DFF] focus:ring-1 focus:ring-accent"
+                    className="rounded border-border text-accent focus:ring-2 focus:ring-accent"
                   />
                   <span>I own this track or it is royalty free.</span>
                 </label>
@@ -479,19 +487,19 @@ export default function Home({ config, allCities = [], onRun, onError }) {
           </section>
 
           {/* 3. Candidate Markets */}
-          <section className="rounded-lg border border-border bg-panel p-4 space-y-3">
+          <section className="rounded-xl border border-border bg-panel p-5 space-y-4 shadow-soft">
             <div className="flex items-center justify-between">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-[#9AA0AC]">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">
                 3. Markets
               </h2>
-              <span className="num text-xs text-[#9AA0AC]">
+              <span className="num text-xs text-muted">
                 {cities.length} of 12
               </span>
             </div>
 
             {/* Presets Segmented Control & Search */}
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="inline-flex rounded-md border border-border bg-raised p-0.5 text-xs">
+              <div className="inline-flex rounded-lg border border-border bg-raised p-1 text-xs">
                 {PRESETS.map((p) => {
                   const isActive = activePreset === p.label;
                   return (
@@ -499,10 +507,10 @@ export default function Home({ config, allCities = [], onRun, onError }) {
                       key={p.label}
                       type="button"
                       onClick={() => handleSelectPreset(p)}
-                      className={`rounded px-2.5 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-1 focus:ring-accent ${
+                      className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all focus:outline-none focus:ring-2 focus:ring-accent ${
                         isActive
-                          ? "bg-panel text-text shadow-sm"
-                          : "text-[#9AA0AC] hover:text-text"
+                          ? "bg-surface text-text shadow-soft"
+                          : "text-muted hover:text-text hover:bg-surface/50"
                       }`}
                     >
                       {p.label}
@@ -517,13 +525,13 @@ export default function Home({ config, allCities = [], onRun, onError }) {
                   value={marketSearch}
                   onChange={(e) => setMarketSearch(e.target.value)}
                   placeholder="Search cities..."
-                  className="w-full rounded-md border border-border bg-raised px-2.5 py-1 text-xs text-text placeholder-[#7A808C] outline-none focus:ring-1 focus:ring-accent focus:border-accent transition-colors"
+                  className="w-full rounded-lg border border-border bg-raised px-3 py-2 text-sm text-text placeholder-placeholder outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all"
                 />
               </div>
             </div>
 
             {/* City Chips */}
-            <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto pt-1">
+            <div className="flex flex-wrap gap-2 max-h-52 overflow-y-auto pt-1">
               {displayedCities.map((item) => {
                 const isSelected = cities.includes(item.city);
                 return (
@@ -531,20 +539,20 @@ export default function Home({ config, allCities = [], onRun, onError }) {
                     key={item.city}
                     type="button"
                     onClick={() => toggleCity(item.city)}
-                    className={`rounded-full px-3 py-1 text-xs transition-colors flex items-center gap-1.5 focus:outline-none focus:ring-1 focus:ring-accent ${
+                    className={`rounded-full px-3.5 py-1.5 text-sm transition-all flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-accent ${
                       isSelected
-                        ? "bg-[#5B9DFF]/15 border border-[#5B9DFF]/40 text-text font-normal"
-                        : "border border-border text-[#9AA0AC] hover:border-accent hover:text-text font-normal"
+                        ? "bg-accent/15 border border-accent text-text font-medium shadow-soft"
+                        : "border border-border text-muted hover:border-accent hover:text-text hover:bg-accent-subtle font-normal"
                     }`}
                   >
                     {isSelected && (
-                      <svg className="h-3 w-3 text-[#5B9DFF] shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                      <svg className="h-3.5 w-3.5 text-accent shrink-0" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
                     )}
                     <span>{item.city}</span>
                     {item.country && (
-                      <span className="text-[10px] text-[#9AA0AC]/70">· {item.country}</span>
+                      <span className="text-xs text-muted/70">· {item.country}</span>
                     )}
                   </button>
                 );

@@ -138,29 +138,33 @@ def bundled_artists() -> list[str]:
 
 
 def search_artists(query: str, limit: int = 8) -> list[dict]:
-    """Live artist autocomplete: Spotify first, then YouTube Music fallback."""
+    """Live artist autocomplete: YouTube Music first (instant), Spotify enrichment."""
     if not query or not query.strip():
         return []
-    try:
-        from . import spotify
+    results = []
+    seen: set[str] = set()
 
-        s = spotify.search_artists(query, limit)
-        if s:
-            return [{"name": a["name"], "type": "Artist"} for a in s]
-    except Exception:  # noqa: BLE001
-        pass
+    def add(name):
+        if name and name.lower() not in seen:
+            seen.add(name.lower())
+            results.append({"name": name, "type": "Artist"})
+
+    # YouTube Music first — no token, instant.
     try:
         from ytmusicapi import YTMusic
 
-        yt = YTMusic()
-        results = yt.search(query, filter="artists") or []
-        out = []
-        for r in results:
-            name = r.get("artist") or r.get("name")
-            if name:
-                out.append({"name": name, "type": "Artist"})
-            if len(out) >= limit:
-                break
-        return out
+        for r in (YTMusic().search(query, filter="artists") or [])[:limit]:
+            add(r.get("artist") or r.get("name"))
     except Exception:  # noqa: BLE001
-        return []
+        pass
+
+    # Spotify enrichment (deduped).
+    try:
+        from . import spotify
+
+        for a in spotify.search_artists(query, limit):
+            add(a.get("name"))
+    except Exception:  # noqa: BLE001
+        pass
+
+    return results[:limit]
