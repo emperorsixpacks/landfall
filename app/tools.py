@@ -157,6 +157,7 @@ def _find_artist(args, state) -> str:
     state.setdefault("catalog", {})
     state["catalog"]["top_song_names"] = [s.get("title") for s in a.get("top_songs", []) if s.get("title")]
     state["catalog"]["top_songs"] = a.get("top_songs", [])
+    state["catalog"]["spotify_top_songs"] = a.get("spotify_top_songs", [])
     state["catalog"]["related_names"] = [r for r in a.get("related", []) if r]
     state["catalog"]["description"] = a.get("description")
     state["catalog"]["albums"] = a.get("albums", [])

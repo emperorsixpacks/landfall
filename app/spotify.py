@@ -104,6 +104,23 @@ def get_albums(artist_id: str, limit: int = 8) -> list[dict]:
     return out
 
 
+def search_tracks(artist_name: str, limit: int = 5) -> list[dict]:
+    """Popular tracks for an artist via track search (top-tracks endpoint is 403
+    under this access, so search is the honest proxy)."""
+    d = _get("/search", {"q": artist_name, "type": "track", "limit": limit})
+    if not d:
+        return []
+    out = []
+    for t in d.get("tracks", {}).get("items", []):
+        out.append(
+            {
+                "title": t.get("name"),
+                "artists": [a.get("name") for a in t.get("artists", [])],
+            }
+        )
+    return out
+
+
 def find_artist(query: str) -> dict | None:
     if not config.spotify_ready():
         return None
@@ -119,5 +136,6 @@ def find_artist(query: str) -> dict | None:
         "genres": info.get("genres", []),
         "image": info.get("image"),
         "albums": albums,
+        "spotify_top_songs": search_tracks(info.get("name") or top.get("name")),
         "source": "Spotify",
     }

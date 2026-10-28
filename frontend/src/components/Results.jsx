@@ -576,37 +576,47 @@ function AudienceProfile({ profile }) {
 }
 
 function ArtistCard({ artist, catalog }) {
-  const topSongs = (catalog.top_songs || []).filter((s) => s.title).slice(0, 5);
+  const ytSongs = (catalog.top_songs || []).filter((s) => s.title).slice(0, 5).map((s) => s.title);
+  const spSongs = (catalog.spotify_top_songs || []).filter((s) => s.title).slice(0, 5).map((s) => s.title);
   return (
-    <section className="flex items-center gap-4 rounded-lg border border-border bg-panel p-4">
-      {catalog.image && (
-        <img
-          src={catalog.image}
-          alt={`${artist} artist image`}
-          className="h-16 w-16 shrink-0 rounded-full border border-border object-cover"
-        />
-      )}
-      <div className="min-w-0 flex-1">
+    <section className="rounded-lg border border-border bg-panel p-4">
+      <div className="flex items-center gap-4">
+        {catalog.image && (
+          <img
+            src={catalog.image}
+            alt={`${artist} artist image`}
+            className="h-14 w-14 shrink-0 rounded-full border border-border object-cover"
+          />
+        )}
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-text">{artist}</span>
           <span className="rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
             Spotify · YouTube
           </span>
         </div>
-        {topSongs.length > 0 && (
-          <div className="mt-2 space-y-0.5">
-            <span className="text-[10px] uppercase tracking-wider text-muted">Top songs</span>
-            <ol className="list-inside list-decimal text-xs text-muted">
-              {topSongs.map((s, i) => (
-                <li key={i} className="truncate">
-                  <span className="text-text">{s.title}</span>
-                </li>
-              ))}
-            </ol>
-          </div>
-        )}
+      </div>
+      <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <SongColumn label="Top songs · YouTube Music" songs={ytSongs} />
+        <SongColumn label="Top songs · Spotify" songs={spSongs} />
       </div>
     </section>
+  );
+}
+
+function SongColumn({ label, songs }) {
+  return (
+    <div>
+      <span className="text-[10px] uppercase tracking-wider text-muted">{label}</span>
+      {songs.length > 0 ? (
+        <ol className="mt-1 list-inside list-decimal text-xs">
+          {songs.map((t, i) => (
+            <li key={i} className="truncate text-text">{t}</li>
+          ))}
+        </ol>
+      ) : (
+        <p className="mt-1 text-xs text-muted">Not available</p>
+      )}
+    </div>
   );
 }
 
