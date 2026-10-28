@@ -581,6 +581,7 @@ def _assemble(state, request, score, blurb):
             "albums": state.get("catalog", {}).get("albums", []),
             "genres": state.get("catalog", {}).get("genres", []),
             "image": state.get("catalog", {}).get("image"),
+            "top_songs": state.get("catalog", {}).get("top_songs", []),
         },
         "markets": state["markets"],
         "collaborators": [{"name": c["name"], "why": c["why"]} for c in state["collaborators"]],

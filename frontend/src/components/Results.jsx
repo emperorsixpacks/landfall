@@ -148,6 +148,11 @@ export default function Results({ result, events = [], cities = [], error, onRes
         </div>
       )}
 
+      {/* Artist card (Spotify image + YouTube top songs) */}
+      {result.catalog && (result.catalog.image || (result.catalog.top_songs?.length > 0)) && (
+        <ArtistCard artist={result.artist} catalog={result.catalog} />
+      )}
+
       {/* Top row: Fit Score & Audio Features */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Fit Score */}
@@ -567,6 +572,41 @@ function AudienceProfile({ profile }) {
         </div>
       )}
     </div>
+  );
+}
+
+function ArtistCard({ artist, catalog }) {
+  const topSongs = (catalog.top_songs || []).filter((s) => s.title).slice(0, 5);
+  return (
+    <section className="flex items-center gap-4 rounded-lg border border-border bg-panel p-4">
+      {catalog.image && (
+        <img
+          src={catalog.image}
+          alt={`${artist} artist image`}
+          className="h-16 w-16 shrink-0 rounded-full border border-border object-cover"
+        />
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-text">{artist}</span>
+          <span className="rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
+            Spotify · YouTube
+          </span>
+        </div>
+        {topSongs.length > 0 && (
+          <div className="mt-2 space-y-0.5">
+            <span className="text-[10px] uppercase tracking-wider text-muted">Top songs</span>
+            <ol className="list-inside list-decimal text-xs text-muted">
+              {topSongs.map((s, i) => (
+                <li key={i} className="truncate">
+                  <span className="text-text">{s.title}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
