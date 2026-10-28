@@ -8,7 +8,7 @@ from typing import Any
 
 import rapidfuzz
 
-from . import audio, bridge, cities, config, llm, qloo_client as qloo, scoring, tools
+from . import audio, bridge, cities, config, http_log, llm, qloo_client as qloo, scoring, tools
 
 SYSTEM_PROMPT = (
     "You plan music releases using Qloo taste data. Call exactly one tool per turn "
@@ -564,6 +564,7 @@ def _assemble(state, request, score, blurb):
         "data_mode": config.QLOO_MODE,
         "origin": state.get("origin"),
         "qloo_calls": qloo.drain_requests(),
+        "api_calls": http_log.drain(),
         "fit_score": score.get("fit"),
         "breakdown": score.get("breakdown"),
         "clip_strength": score.get("clip_strength"),

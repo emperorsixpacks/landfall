@@ -6,9 +6,11 @@ YouTube Music info (public), never Qloo response data (see Qloo cache terms).
 """
 from __future__ import annotations
 
+import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Optional
 
-from . import cache, config
+from . import cache, config, http_log
 
 YT_TTL = 24 * 3600
 YT_SOURCE = "YouTube Music (unofficial)"
@@ -27,16 +29,19 @@ def _normalize(raw: dict) -> dict:
 
 
 def _lookup_live(query: str) -> Optional[dict]:
+    t0 = time.monotonic()
     try:
         from ytmusicapi import YTMusic
 
         yt = YTMusic()
         artists = yt.search(query, filter="artists") or []
         if not artists:
+            http_log.record("youtube", f"search {query}", (time.monotonic() - t0) * 1000, True)
             return None
         best = artists[0]
         browse_id = best.get("browseId")
         if not browse_id:
+            http_log.record("youtube", f"search {query}", (time.monotonic() - t0) * 1000, True)
             return None
         page = yt.get_artist(browse_id)
         songs = []
@@ -53,6 +58,7 @@ def _lookup_live(query: str) -> Optional[dict]:
             for r in (page.get("related", {}).get("results") or [])
             if (r.get("title") or r.get("name"))
         ]
+        http_log.record("youtube", f"artist {best.get('artist') or query}", (time.monotonic() - t0) * 1000, True)
         return {
             "name": page.get("name") or page.get("artist") or best.get("artist") or query,
             "browse_id": browse_id,
@@ -61,6 +67,7 @@ def _lookup_live(query: str) -> Optional[dict]:
             "related": related,
         }
     except Exception:  # noqa: BLE001
+        http_log.record("youtube", f"search {query}", (time.monotonic() - t0) * 1000, False)
         return None
 
 
@@ -81,9 +88,14 @@ def find_artist(query: str) -> dict:
     if cached:
         return {"ok": True, "artist": cached["artist"], "source": cached.get("source", YT_SOURCE)}
 
-    artist = _lookup_live(query)
+    artist = None
     source = YT_SOURCE
-    spotify = _spotify_find(query)
+    # Run YouTube Music and Spotify in parallel to cut lookup latency.
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        f_yt = ex.submit(_lookup_live, query)
+        f_sp = ex.submit(_spotify_find, query)
+        artist = f_yt.result()
+        spotify = f_sp.result()
 
     if artist is None and spotify:
         artist = {

@@ -9,10 +9,11 @@ from __future__ import annotations
 import base64
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 
-from . import config
+from . import config, http_log
 
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 API = "https://api.spotify.com/v1"
@@ -52,11 +53,14 @@ def _get(path: str, params: dict | None = None):
     tok = _get_token()
     if not tok:
         return None
+    t0 = time.monotonic()
     try:
-        r = httpx.get(f"{API}{path}", params=params, headers={"Authorization": f"Bearer {tok}"}, timeout=20)
+        r = httpx.get(f"{API}{path}", params=params, headers={"Authorization": f"Bearer {tok}"}, timeout=15)
         r.raise_for_status()
+        http_log.record("spotify", path, (time.monotonic() - t0) * 1000, True)
         return r.json()
     except Exception:  # noqa: BLE001
+        http_log.record("spotify", path, (time.monotonic() - t0) * 1000, False)
         return None
 
 
@@ -128,14 +132,21 @@ def find_artist(query: str) -> dict | None:
     if not cands:
         return None
     top = cands[0]
-    info = get_artist(top["id"]) or {}
-    albums = get_albums(top["id"])
+    name = top.get("name")
+    # Parallelize the three follow-up calls to keep the lookup fast.
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        f_info = ex.submit(get_artist, top["id"])
+        f_albums = ex.submit(get_albums, top["id"])
+        f_tracks = ex.submit(search_tracks, name)
+        info = f_info.result() or {}
+        albums = f_albums.result() or []
+        tracks = f_tracks.result() or []
     return {
-        "name": info.get("name") or top.get("name"),
+        "name": info.get("name") or name,
         "id": top.get("id"),
         "genres": info.get("genres", []),
         "image": info.get("image"),
         "albums": albums,
-        "spotify_top_songs": search_tracks(info.get("name") or top.get("name")),
+        "spotify_top_songs": tracks,
         "source": "Spotify",
     }

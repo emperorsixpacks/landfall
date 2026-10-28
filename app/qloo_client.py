@@ -17,7 +17,7 @@ from typing import Any, Optional
 import httpx
 import yaml
 
-from . import cache, config, mock_data
+from . import cache, config, http_log, mock_data
 
 HEADERS = {"X-Api-Key": config.QLOO_API_KEY, "Content-Type": "application/json"}
 QLOO_TTL = 24 * 3600  # server-side caching has no time limit per the guide
@@ -68,6 +68,7 @@ def _get(path: str, params: dict, timeout: float = config.TOOL_TIMEOUT_SECONDS) 
     _gate()
     url = f"{config.QLOO_BASE_URL}{path}"
     _log("GET", path, params)
+    t0 = time.monotonic()
     last = None
     for attempt in range(2):
         r = httpx.get(url, params=params, headers=HEADERS, timeout=timeout)
@@ -75,9 +76,11 @@ def _get(path: str, params: dict, timeout: float = config.TOOL_TIMEOUT_SECONDS) 
             time.sleep(1.0)
             last = r
             continue
+        http_log.record("qloo", path, (time.monotonic() - t0) * 1000, r.status_code < 400)
         r.raise_for_status()
         return r.json()
     if last is not None:
+        http_log.record("qloo", path, (time.monotonic() - t0) * 1000, False)
         last.raise_for_status()
     return {}
 
