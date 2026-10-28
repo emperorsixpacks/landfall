@@ -49,12 +49,12 @@ def _lookup_live(query: str) -> Optional[dict]:
                 }
             )
         related = [
-            r.get("name")
+            r.get("title") or r.get("name")
             for r in (page.get("related", {}).get("results") or [])
-            if r.get("name")
+            if (r.get("title") or r.get("name"))
         ]
         return {
-            "name": page.get("artist") or best.get("artist") or query,
+            "name": page.get("name") or page.get("artist") or best.get("artist") or query,
             "browse_id": browse_id,
             "description": page.get("description"),
             "top_songs": songs,
