@@ -71,9 +71,22 @@ export function webglAvailable() {
   if (typeof window === "undefined") return false;
   try {
     const c = document.createElement("canvas");
-    return !!(
+    const gl =
       window.WebGLRenderingContext &&
-      (c.getContext("webgl") || c.getContext("experimental-webgl"))
+      (c.getContext("webgl") || c.getContext("experimental-webgl"));
+    if (!gl) return false;
+    // Some environments (VMs, headless) create a context but fail to compile
+    // shaders at render time. Verify a trivial program compiles first.
+    const vs = gl.createShader(gl.VERTEX_SHADER);
+    const fs = gl.createShader(gl.FRAGMENT_SHADER);
+    if (!vs || !fs) return false;
+    gl.shaderSource(vs, "attribute vec3 p; void main(){ gl_Position = vec4(p, 1.0); }");
+    gl.shaderSource(fs, "void main(){ gl_FragColor = vec4(1.0); }");
+    gl.compileShader(vs);
+    gl.compileShader(fs);
+    return (
+      gl.getShaderParameter(vs, gl.COMPILE_STATUS) &&
+      gl.getShaderParameter(fs, gl.COMPILE_STATUS)
     );
   } catch {
     return false;
