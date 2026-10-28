@@ -1,13 +1,16 @@
 """Fit score — pure code, never the LLM.
 
-fit = w_catalog * catalog_similarity + w_audience * audience_affinity + w_hook * hook_strength
-Missing components are renormalized and flagged, so the score is always honest.
+fit = 0.5 * catalog_match + 0.5 * audience_match
+  catalog_match: comparables' tags vs the artist's catalog profile
+  audience_match: comparables' tags vs the audience profile
+Hook strength is reported separately as `clip_strength`, not folded into fit.
+Missing parts are renormalized and flagged.
 """
 from __future__ import annotations
 
-from typing import Any
-
 from . import config
+
+FIT_WEIGHTS = {"catalog_match": 0.5, "audience_match": 0.5}
 
 
 def _jaccard(a: set, b: set) -> float:
@@ -16,74 +19,77 @@ def _jaccard(a: set, b: set) -> float:
     return len(a & b) / len(a | b)
 
 
-def catalog_similarity(song_tag_names: list[str], artist_tag_names: list[str]) -> float:
-    a = {t.lower() for t in song_tag_names if t}
-    b = {t.lower() for t in artist_tag_names if t}
+def _overlap(comparable_tags: list[str], profile_tags: list[str]):
+    a = {t.lower() for t in comparable_tags if t}
+    b = {t.lower() for t in profile_tags if t}
     if not a or not b:
         return None
     return round(_jaccard(a, b) * 100.0, 1)
 
 
-def audience_affinity(comparable_scores: list[float]) -> float:
-    scores = [s for s in comparable_scores if s is not None]
-    if not scores:
-        return None
-    return round(sum(scores) / len(scores) * 100.0, 1)
+def catalog_match(comparable_tags, catalog_tags):
+    return _overlap(comparable_tags, catalog_tags)
 
 
-def hook_strength(hooks: list[dict]) -> float:
+def audience_match(comparable_tags, audience_tags):
+    return _overlap(comparable_tags, audience_tags)
+
+
+def clip_strength(hooks: list[dict]):
     if not hooks:
         return None
-    top = max(h["score"] for h in hooks if h.get("score") is not None)
+    top = max((h.get("score") for h in hooks if h.get("score") is not None), default=None)
+    if top is None:
+        return None
     return round(top * 100.0, 1)
 
 
 def score_fit(evidence: dict) -> dict:
-    """evidence: {song_tags, artist_tags, comparable_scores, hooks}"""
-    weights = config.FIT_WEIGHTS
+    """evidence: {comparable_tags, catalog_tags, audience_tags, hooks}"""
+    comparable_tags = evidence.get("comparable_tags", [])
     parts = {
-        "catalog": catalog_similarity(evidence.get("song_tags", []), evidence.get("artist_tags", [])),
-        "audience": audience_affinity(evidence.get("comparable_scores", [])),
-        "hook": hook_strength(evidence.get("hooks", [])),
+        "catalog_match": catalog_match(comparable_tags, evidence.get("catalog_tags", [])),
+        "audience_match": audience_match(comparable_tags, evidence.get("audience_tags", [])),
     }
+    cs = clip_strength(evidence.get("hooks", []))
+
+    warnings = [f"{k} unavailable" for k, v in parts.items() if v is None]
+    if cs is None:
+        warnings.append("clip strength unavailable")
 
     present = {k: v for k, v in parts.items() if v is not None}
-    warnings = []
-    for k, v in parts.items():
-        if v is None:
-            warnings.append(f"{k} unavailable")
     if not present:
-        return {"fit": None, "breakdown": parts, "explanation": "No signals resolved; fit could not be computed.", "warnings": warnings}
+        return {
+            "fit": None,
+            "breakdown": parts,
+            "clip_strength": cs,
+            "explanation": "No signals resolved; fit could not be computed.",
+            "warnings": warnings,
+        }
 
-    total_w = sum(weights[k] for k in present)
-    fit = sum(weights[k] * present[k] for k in present) / total_w
-    fit = round(min(100.0, max(0.0, fit)), 1)
+    total_w = sum(FIT_WEIGHTS[k] for k in present)
+    fit = round(sum(FIT_WEIGHTS[k] * present[k] for k in present) / total_w, 1)
+    fit = min(100.0, max(0.0, fit))
 
     return {
         "fit": fit,
         "breakdown": {k: (round(v, 1) if v is not None else None) for k, v in parts.items()},
-        "explanation": _explain(parts, warnings),
+        "clip_strength": cs,
+        "explanation": _explain(parts, cs, warnings),
         "warnings": warnings,
     }
 
 
-def _explain(parts: dict, warnings: list[str]) -> str:
-    catalog = parts["catalog"]
-    audience = parts["audience"]
-    hook = parts["hook"]
+def _explain(parts: dict, cs, warnings: list[str]) -> str:
     sents = []
-    if catalog is not None:
-        sents.append(
-            f"Catalog similarity is {catalog:.0f}/100, from tag overlap between the song's comparables and the artist's taste tags."
-        )
-    if audience is not None:
-        sents.append(
-            f"Audience affinity is {audience:.0f}/100, the mean Qloo affinity of the comparables against the artist's audience."
-        )
-    if hook is not None:
-        sents.append(
-            f"Hook strength is {hook:.0f}/100, from the strongest 15-30 second window in the audio."
-        )
+    cm = parts.get("catalog_match")
+    am = parts.get("audience_match")
+    if cm is not None:
+        sents.append(f"Catalog match is {cm:.0f}/100, from tag overlap between the song's comparables and the artist's catalog profile.")
+    if am is not None:
+        sents.append(f"Audience match is {am:.0f}/100, from tag overlap between the song's comparables and the audience profile.")
+    if cs is not None:
+        sents.append(f"Clip strength is {cs:.0f}/100, from the strongest 15-30 second window.")
     for w in warnings:
-        sents.append(f"{w.capitalize()} was unavailable and renormalized out of the score.")
+        sents.append(f"{w.capitalize()} was unavailable and excluded from the score.")
     return " ".join(sents)

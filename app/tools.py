@@ -11,7 +11,7 @@ from typing import Any, Callable
 
 import rapidfuzz
 
-from . import audio, cities, config, llm, lookup, qloo_client as qloo
+from . import audio, bridge, cities, config, llm, lookup, qloo_client as qloo
 
 TYPE_MAP = {
     "artist": "urn:entity:artist",
@@ -98,6 +98,10 @@ TOOL_SCHEMAS: dict[str, dict] = {
     "describe_sound": {
         "description": "Turn audio features into plain descriptors and 'sounds like' comparables.",
         "args": {"features": {"type": "dict", "required": True}},
+    },
+    "sound_to_tags": {
+        "description": "Map audio features to resolved Qloo tags (sound-to-taste bridge).",
+        "args": {"features": {"type": "dict"}},
     },
     "write_captions": {
         "description": "Write one short caption per clip.",
@@ -307,6 +311,15 @@ def _cut_clips(args, state) -> str:
     return f"Cut {len(ok)} clip(s)" + (f", {len(clips) - len(ok)} failed" if len(clips) != len(ok) else "") + "."
 
 
+def _sound_to_tags(args, state) -> str:
+    features = args.get("features") or state.get("audio") or {}
+    res = bridge.sound_to_tags(features)
+    state["bridge"] = {"tags": res.get("tags", []), "trace": res.get("bridge_trace", [])}
+    if not res.get("ok"):
+        return "sound_to_tags resolved no Qloo tags (coverage gap)."
+    return f"Sound-to-taste: {len(res['tags'])} tag(s) resolved."
+
+
 def _describe_sound(args, state) -> str:
     features = args.get("features") or state.get("audio") or {}
     catalog = state.get("catalog", {})
@@ -407,6 +420,7 @@ TOOLS: dict[str, Callable] = {
     "analyze_audio": _analyze_audio,
     "cut_clips": _cut_clips,
     "describe_sound": _describe_sound,
+    "sound_to_tags": _sound_to_tags,
     "write_captions": _write_captions,
     "youtube_audience": _youtube_audience,
 }

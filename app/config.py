@@ -59,10 +59,14 @@ AUDIO_TTL_SECONDS = 60 * 60  # delete uploads after 1 hour
 # --- Paths ------------------------------------------------------------------
 CACHE_DIR = ROOT / "cache"
 UPLOAD_DIR = ROOT / "uploads"
-CLIP_DIR = ROOT / "clips"
+CLIP_DIR = Path(os.environ.get("CLIPS_DIR", str(ROOT / "clips")))
 SAMPLES_DIR = ROOT / "samples"
 BUNDLED_CACHE_DIR = ROOT / "cached"
 FRONTEND_DIST = ROOT / "frontend" / "dist"
+
+# Hosting hardening
+MAX_CONCURRENT_RUNS = int(os.environ.get("MAX_CONCURRENT_RUNS", "3"))
+RATE_LIMIT_PER_MINUTE = int(os.environ.get("RATE_LIMIT_PER_MINUTE", "10"))
 
 for _d in (CACHE_DIR, UPLOAD_DIR, CLIP_DIR):
     _d.mkdir(parents=True, exist_ok=True)

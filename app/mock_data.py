@@ -222,6 +222,28 @@ def ping() -> dict:
     return {"ok": True, "latency_ms": 1, "found": True, "sample_data": True}
 
 
+# Synthetic tag vocabulary for the sound-to-taste bridge (sample data only).
+_TAG_VOCAB = {
+    "upbeat": "Upbeat",
+    "slow tempo": "Slow Tempo",
+    "melancholic": "Melancholic",
+    "uplifting": "Uplifting",
+    "energetic": "Energetic",
+    "mellow": "Mellow",
+    "bright": "Bright",
+    "rhythmic": "Rhythmic",
+}
+
+
+def search_tags(term: str, limit: int = 5) -> dict:
+    t = term.lower().strip()
+    cands = []
+    for key, name in _TAG_VOCAB.items():
+        if key == t or key.startswith(t) or t in key:
+            cands.append({"id": f"urn:tag:style:qloo:{key.replace(' ', '_')}", "name": name, "type": "urn:tag:style:qloo"})
+    return {"ok": bool(cands), "candidates": cands[:limit], "error": None, "sample_data": True}
+
+
 def _key_by_id(entity_id: str):
     for k in _CATALOG:
         if _uid(k) == entity_id:

@@ -8,7 +8,7 @@ from typing import Any
 
 import rapidfuzz
 
-from . import audio, cities, config, llm, qloo_client as qloo, scoring, tools
+from . import audio, bridge, cities, config, llm, qloo_client as qloo, scoring, tools
 
 SYSTEM_PROMPT = (
     "You plan music releases using Qloo taste data. Call exactly one tool per turn "
@@ -27,6 +27,7 @@ STAGE_BY_TOOL = {
     "qloo_insights": "TARGET",
     "analyze_audio": "LISTEN",
     "describe_sound": "COMPARE",
+    "sound_to_tags": "BRIDGE",
     "cut_clips": "CLIP",
     "write_captions": "CLIP",
     "youtube_audience": "TARGET",
@@ -78,7 +79,7 @@ async def run_agent(request: dict):
 
     # Step 1: identify the artist via YouTube Music (always, deterministically, first).
     if state["artist_name"]:
-        _, ev = await _exec("find_artist", {"query": state["artist_name"]}, state, "IDENTIFY")
+        _, ev = await _exec("find_artist", {"query": state["artist_name"]}, state, "IDENTIFY", source="fallback")
         yield ev
 
     last_results: list[str] = []
@@ -146,7 +147,7 @@ async def run_agent(request: dict):
         yield item
 
 
-async def _exec(tool_name, args, state, stage, why="", step=0):
+async def _exec(tool_name, args, state, stage, why="", step=0, source="agent"):
     t0 = time.monotonic()
     handler = tools.TOOLS[tool_name]
     try:
@@ -160,12 +161,12 @@ async def _exec(tool_name, args, state, stage, why="", step=0):
     state["steps_used"] += 1
     state.setdefault("called_tools", []).append(tool_name)
     state.setdefault("called", set()).add(_call_key(tool_name, args))
-    event = _event(step, stage, tool_name, why, args, summary, status, latency)
+    event = _event(step, stage, tool_name, why, args, summary, status, latency, source)
     state.setdefault("trace", []).append(event["event"])
     return summary, event
 
 
-def _event(step, stage, tool, why, args, summary, status, latency=None):
+def _event(step, stage, tool, why, args, summary, status, latency=None, source="agent"):
     return {
         "type": "event",
         "event": {
@@ -177,6 +178,7 @@ def _event(step, stage, tool, why, args, summary, status, latency=None):
             "result_summary": summary,
             "latency_ms": latency,
             "status": status,
+            "source": source,
         },
     }
 
@@ -263,8 +265,8 @@ def _retry_messages(messages, errors, decision):
     ]
 
 
-def _trace_event(state, tool, stage, args, summary, status="ok", why=""):
-    ev = _event(state["steps_used"], stage, tool, why, args, summary, status, None)
+def _trace_event(state, tool, stage, args, summary, status="ok", why="", source="fallback"):
+    ev = _event(state["steps_used"], stage, tool, why, args, summary, status, None, source)
     state.setdefault("trace", []).append(ev["event"])
     return {"type": "event", "event": ev["event"]}
 
@@ -328,6 +330,18 @@ async def _finish(state: dict, request: dict):
         tools._describe_sound({"features": state["audio"]}, state)
         yield tr("describe_sound", "COMPARE", {}, f"Sound described with {len((state.get('sound') or {}).get('descriptors', []))} descriptor(s).")
 
+    # BRIDGE: sound-to-taste (Section D) — audio features -> resolved Qloo tags.
+    bridge_tags: list[dict] = []
+    bridge_trace: list[dict] = []
+    if state.get("audio") and state["audio"].get("ok"):
+        br = bridge.sound_to_tags(state["audio"])
+        bridge_tags = br.get("tags") or []
+        bridge_trace = br.get("bridge_trace") or []
+        state["bridge"] = {"tags": bridge_tags, "trace": bridge_trace}
+        yield tr("sound_to_tags", "BRIDGE", {"features": True}, f"Sound-to-taste: {len(bridge_tags)} tag(s) resolved.")
+    else:
+        state["bridge"] = {"tags": [], "trace": []}
+
     # Origin (home city) for the globe's arcs — best-effort if the agent skipped it.
     if state["artist_name"] and not state.get("origin"):
         msg = tools._find_home_city({}, state)
@@ -352,6 +366,7 @@ async def _finish(state: dict, request: dict):
                     "result_summary": f"{city}: {market['score']}" if market["status"] == "scored" else f"{city}: no data",
                     "latency_ms": latency,
                     "status": "ok" if market["status"] == "scored" else "error",
+                    "source": "fallback",
                 }
             )
             yield {
@@ -365,6 +380,7 @@ async def _finish(state: dict, request: dict):
                     "result_summary": f"{city}: {market['score']}" if market["status"] == "scored" else f"{city}: no data",
                     "latency_ms": latency,
                     "status": "ok" if market["status"] == "scored" else "error",
+                    "source": "fallback",
                     "market_scored": {"city": city, "score": market["score"]},
                 },
             }
@@ -398,14 +414,15 @@ async def _finish(state: dict, request: dict):
             yield tr("write_captions", "CLIP", {}, f"Wrote {len(state['clips'])} caption(s).")
 
     # SCORE: fit score (pure code) + blurb (LLM, from evidence only).
-    song_tags = _song_tags(state)
-    artist_tags = [t.get("name", "") for t in catalog_tags]
-    comparable_scores = _comparable_scores(state, artist_entity)
+    comparable_tags = _song_tags(state)
+    catalog_names = [t.get("name", "") for t in catalog_tags]
+    audience_names = _audience_tags(state, artist_entity, catalog_names)
+    _comparable_scores(state, artist_entity)  # artist-comparables call (uses bridge tags)
     score = scoring.score_fit(
         {
-            "song_tags": song_tags,
-            "artist_tags": artist_tags,
-            "comparable_scores": comparable_scores,
+            "comparable_tags": comparable_tags,
+            "catalog_tags": catalog_names,
+            "audience_tags": audience_names,
             "hooks": (state["audio"] or {}).get("hooks") or [],
         }
     )
@@ -421,6 +438,7 @@ async def _finish(state: dict, request: dict):
             "result_summary": f"fit={score.get('fit')}",
             "latency_ms": None,
             "status": "ok",
+            "source": "fallback",
         }
     )
 
@@ -442,12 +460,21 @@ def _market_from_heatmap(city, hm) -> dict:
 
 def _attach_venues(state, artist_entity) -> None:
     """Best-effort venue lookup for the top scored markets only (keeps call count low)."""
+    tag_ids = bridge.tag_ids((state.get("bridge") or {}).get("tags", []))
     for market in state["markets"][:3]:
         if market["status"] != "scored":
             continue
-        v = qloo.venues(artist_entity["id"], market["city"], limit=6)
+        v = qloo.venues(artist_entity["id"], market["city"], limit=6, tags=tag_ids)
         if v["ok"]:
             market["venues"] = v["places"]
+    if tag_ids:
+        _mark_used(state, "venues")
+
+
+def _mark_used(state, label: str) -> None:
+    for entry in (state.get("bridge") or {}).get("trace", []):
+        if entry.get("qloo_tag_id") and label not in entry.setdefault("used_in", []):
+            entry["used_in"].append(label)
 
 
 def _song_tags(state) -> list[str]:
@@ -461,6 +488,16 @@ def _song_tags(state) -> list[str]:
     return tags
 
 
+def _audience_tags(state, artist_entity, base: list[str]) -> list[str]:
+    tags = list(base)
+    for e in state.get("related_entities", [])[:5]:
+        if e.get("id"):
+            ta = qloo.entity_tags(e["id"], limit=10)
+            if ta["ok"]:
+                tags.extend(t.get("name", "") for t in ta["tags"])
+    return tags
+
+
 def _comparable_scores(state, artist_entity) -> list[float]:
     comparables = (state.get("sound") or {}).get("comparables", [])
     if not comparables or not artist_entity:
@@ -468,7 +505,10 @@ def _comparable_scores(state, artist_entity) -> list[float]:
     ids = [c["id"] for c in comparables if c.get("id")]
     if not ids:
         return []
-    aff = qloo.affinity_between(artist_entity["id"], ids)
+    tag_ids = bridge.tag_ids((state.get("bridge") or {}).get("tags", []))
+    aff = qloo.affinity_between(artist_entity["id"], ids, tags=tag_ids)
+    if tag_ids:
+        _mark_used(state, "comparables")
     return [aff["scores"].get(c["id"]) for c in comparables if c.get("id")]
 
 
@@ -525,8 +565,13 @@ def _assemble(state, request, score, blurb):
         "qloo_calls": qloo.drain_requests(),
         "fit_score": score.get("fit"),
         "breakdown": score.get("breakdown"),
+        "clip_strength": score.get("clip_strength"),
         "explanation": score.get("explanation"),
         "warnings": score.get("warnings"),
+        "bridge": {
+            "tags": (state.get("bridge") or {}).get("tags", []),
+            "trace": (state.get("bridge") or {}).get("trace", []),
+        },
         "audience_profile": {
             "tags": [{"name": t.get("name"), "id": t.get("id")} for t in state["audience"]["tags"]],
             "entities": [{"name": e.get("name"), "id": e.get("id")} for e in state.get("related_entities", [])],

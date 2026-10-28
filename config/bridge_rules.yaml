@@ -1,0 +1,37 @@
+# Sound-to-taste bridge rules: map audio features to Qloo tag search terms.
+# `feature` is a dot path into the audio features dict; `op` is gte/lte/gt/lt/eq;
+# `value` is the threshold; `search_term` is resolved through GET /v2/tags
+# (best fuzzy match only, never an invented tag id).
+rules:
+  - feature: tempo
+    op: gte
+    value: 120
+    search_term: upbeat
+  - feature: tempo
+    op: lt
+    value: 90
+    search_term: slow tempo
+  - feature: mode
+    op: eq
+    value: minor
+    search_term: melancholic
+  - feature: mode
+    op: eq
+    value: major
+    search_term: uplifting
+  - feature: energy.peak
+    op: gte
+    value: 0.6
+    search_term: energetic
+  - feature: energy.mean
+    op: lt
+    value: 0.25
+    search_term: mellow
+  - feature: brightness.high
+    op: gte
+    value: 0.35
+    search_term: bright
+  - feature: onset_density_per_sec
+    op: gte
+    value: 1.5
+    search_term: rhythmic

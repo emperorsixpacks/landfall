@@ -107,6 +107,25 @@ def search(name: str, types: list[str], limit: int = 5) -> dict:
     return _cached("qloo_search", parts, fetch)
 
 
+def search_tags(term: str, limit: int = 5) -> dict:
+    """Resolve a plain term to Qloo tag candidates via GET /v2/tags."""
+    if config.QLOO_MODE == "mock":
+        return mock_data.search_tags(term, limit)
+    parts = {"term": term, "limit": limit}
+
+    def fetch():
+        try:
+            data = _get("/v2/tags", {"filter.query": term, "take": limit})
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "candidates": [], "error": _err(e)}
+        cands = []
+        for t in (data.get("results") or {}).get("tags", [])[:limit]:
+            cands.append({"id": t.get("tag_id") or t.get("id"), "name": t.get("name"), "type": t.get("subtype")})
+        return {"ok": bool(cands), "candidates": cands, "error": None}
+
+    return _cached("qloo_search_tags", parts, fetch)
+
+
 def by_ids(entity_ids: list[str]) -> dict:
     if config.QLOO_MODE == "mock":
         return mock_data.by_ids(entity_ids)
@@ -204,15 +223,19 @@ def related(entity_type: str, entity_id: str, limit: int = 10, exclude: list[str
     return {"ok": out["ok"], "entities": entities, "error": out["error"]}
 
 
-def affinity_between(signal_entity_id: str, target_ids: list[str]) -> dict:
+def affinity_between(signal_entity_id: str, target_ids: list[str], tags: list[str] | None = None) -> dict:
     if config.QLOO_MODE == "mock":
         return mock_data.affinity_between(signal_entity_id, target_ids)
     if not target_ids:
         return {"ok": False, "scores": {}, "error": "no target ids"}
-    out = insights(
-        "urn:entity:artist",
-        **{"signal.interests.entities": signal_entity_id, "filter.results.entities": ",".join(target_ids), "take": len(target_ids)},
-    )
+    params: dict[str, Any] = {
+        "signal.interests.entities": signal_entity_id,
+        "filter.results.entities": ",".join(target_ids),
+        "take": len(target_ids),
+    }
+    if tags:
+        params["signal.interests.tags"] = ",".join(tags)
+    out = insights("urn:entity:artist", **params)
     scores = {}
     if out["ok"]:
         for e in out["results"].get("entities", []):
@@ -221,17 +244,17 @@ def affinity_between(signal_entity_id: str, target_ids: list[str]) -> dict:
     return {"ok": out["ok"] and bool(scores), "scores": scores, "error": out["error"]}
 
 
-def venues(entity_id: str, city: str, limit: int = 6) -> dict:
+def venues(entity_id: str, city: str, limit: int = 6, tags: list[str] | None = None) -> dict:
     """Place/venue results correlated with an entity in a city, with coordinates.
 
     Only returned if the place response carries geocode coordinates; we never
     geocode venues ourselves."""
     if config.QLOO_MODE == "mock":
         return mock_data.venues(entity_id, city, limit)
-    out = insights(
-        "urn:entity:place",
-        **{"signal.interests.entities": entity_id, "filter.geocode.name": city, "take": limit},
-    )
+    params: dict[str, Any] = {"signal.interests.entities": entity_id, "filter.geocode.name": city, "take": limit}
+    if tags:
+        params["filter.tags"] = ",".join(tags)
+    out = insights("urn:entity:place", **params)
     places = []
     if out["ok"]:
         for p in out["results"].get("entities", []):
