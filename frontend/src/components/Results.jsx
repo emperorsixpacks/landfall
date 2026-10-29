@@ -386,7 +386,9 @@ export default function Results({ result, events = [], cities = [], error, onRes
         </section>
 
         <section className="rounded-xl border border-border bg-panel p-5 shadow-soft space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">Collaborators</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted" title="Based on overlap in what fans consume. A correlation, not genre or chart data.">
+            Collaborators · Qloo affinity
+          </h2>
           <Collaborators collabs={result.collaborators} />
         </section>
       </div>
@@ -430,7 +432,7 @@ function Legend() {
         <span className="inline-block h-2.5 w-2.5 rounded-full border border-[#5A616D]" />
         no Qloo data
       </span>
-      <span>Predicted affinity from Qloo geographic heatmaps, not streams.</span>
+      <span>Predicted taste affinity, not chart position.</span>
     </div>
   );
 }
@@ -542,7 +544,9 @@ function AudienceProfile({ profile }) {
     <div className="space-y-4 text-xs">
       {/* Taste tags */}
       <div>
-        <p className="mb-2 text-muted">Audience taste tags (affinity)</p>
+        <p className="mb-2 text-muted" title="Based on overlap in what fans consume. A correlation, not genre or chart data.">
+          Qloo affinity <span className="cursor-help">ⓘ</span>
+        </p>
         {tags.length === 0 ? (
           <p className="text-muted">No tags resolved from Qloo.</p>
         ) : (
@@ -559,7 +563,9 @@ function AudienceProfile({ profile }) {
       {/* Related entities */}
       {entities.length > 0 && (
         <div>
-          <p className="mb-2 text-muted">Related entities</p>
+          <p className="mb-2 text-muted" title="Based on overlap in what fans consume. A correlation, not genre or chart data.">
+            Related artists <span className="cursor-help">ⓘ</span>
+          </p>
           <div className="flex flex-wrap gap-1.5">
             {entities.slice(0, 10).map((e, i) => (
               <span key={i} className="rounded-full border border-border px-2.5 py-0.5 text-muted">
@@ -573,7 +579,7 @@ function AudienceProfile({ profile }) {
       {/* Demographics */}
       {demo && (
         <div>
-          <p className="mb-2 text-muted">Demographic affinity</p>
+          <p className="mb-2 text-muted">Affinity index (relative, not a share)</p>
           <div className="grid grid-cols-2 gap-2">
             {demo.gender &&
               Object.entries(demo.gender).map(([k, v]) => (

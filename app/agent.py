@@ -39,6 +39,8 @@ def _new_state(request: dict) -> dict:
         "artist_name": request.get("artist"),
         "song_id": request.get("song_id"),
         "genre_tag": request.get("genre"),
+        "sounds_like": request.get("sounds_like") or [],
+        "genres": request.get("genres") or [],
         "cities": cities.normalize_selection(request.get("cities") or []),
         "catalog": {"top_song_names": [], "related_names": [], "tags": [], "artist_entity": None},
         "audience": {"tags": [], "demographics": None},
@@ -345,6 +347,13 @@ async def _finish(state: dict, request: dict):
         tools._describe_sound({"features": state["audio"]}, state)
         yield tr("describe_sound", "COMPARE", {}, f"Sound described with {len((state.get('sound') or {}).get('descriptors', []))} descriptor(s).")
 
+    # User-picked sounds-like artists take priority over LLM-inferred comparables.
+    if state.get("sounds_like"):
+        user_comps = _resolve_user_artists(state["sounds_like"])
+        if user_comps:
+            state.setdefault("sound", {})["comparables"] = user_comps
+            yield tr("sounds_like", "COMPARE", {"artists": state["sounds_like"]}, f"Using {len(user_comps)} user-picked comparable(s).", source="user")
+
     # BRIDGE: sound-to-taste (Section D) — audio features -> resolved Qloo tags.
     bridge_tags: list[dict] = []
     bridge_trace: list[dict] = []
@@ -366,6 +375,18 @@ async def _finish(state: dict, request: dict):
                 bridge_tags.append(t)
                 existing.add(t.get("id"))
         state["bridge"]["tags"] = bridge_tags
+
+    # User-provided genre chips → Qloo tags (source "user", never invented).
+    if state.get("genres"):
+        user_tags = _resolve_user_genres(state["genres"])
+        existing = {t.get("id") for t in bridge_tags}
+        for t in user_tags:
+            if t.get("id") not in existing:
+                bridge_tags.append(t)
+                existing.add(t.get("id"))
+        state["bridge"]["tags"] = bridge_tags
+        if user_tags:
+            yield tr("genres", "BRIDGE", {"genres": state["genres"]}, f"Resolved {len(user_tags)} of {len(state['genres'])} genre(s) in Qloo.", source="user")
 
     # Origin (home city) for the globe's arcs — best-effort if the agent skipped it.
     if state["artist_name"] and not state.get("origin"):
@@ -490,6 +511,36 @@ def _signal_entities(state, artist_entity):
         if e.get("id") and e["id"] not in ids:
             ids.append(e["id"])
     return ids
+
+
+def _resolve_user_artists(names):
+    out = []
+    for name in names:
+        if not name:
+            continue
+        r = qloo.search(name, [tools.TYPE_MAP["artist"]])
+        if r.get("candidates"):
+            c0 = r["candidates"][0]
+            out.append({"name": c0["name"], "id": c0["id"], "score": c0.get("score"), "source": "user"})
+    return out
+
+
+def _resolve_user_genres(genres):
+    out = []
+    for g in genres:
+        if not g:
+            continue
+        res = qloo.search_tags(g, limit=5)
+        best = None
+        best_ratio = 0
+        for c in (res.get("candidates") or []):
+            ratio = rapidfuzz.fuzz.ratio(g.lower(), (c.get("name") or "").lower())
+            if ratio >= 85 and ratio > best_ratio:
+                best = c
+                best_ratio = ratio
+        if best:
+            out.append({"id": best["id"], "name": best["name"], "term": g, "source": "user"})
+    return out
 
 
 def _market_from_heatmap(city, hm) -> dict:
