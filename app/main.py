@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import agent, audio, baseline as baseline_mod, cities as cities_mod, config, lookup
+from . import agent, audio, cities as cities_mod, config, lookup, qloo_client as qloo
 
 
 @asynccontextmanager
@@ -156,16 +156,6 @@ async def run(request: Request):
     return StreamingResponse(gen(), media_type="text/event-stream")
 
 
-@app.post("/api/baseline")
-async def baseline_endpoint(request: Request):
-    if _rate_limited(_client_ip(request)):
-        raise HTTPException(429, "rate limit exceeded")
-    body = await request.json()
-    if not (body.get("artist") or "").strip():
-        raise HTTPException(400, "artist is required")
-    return await asyncio.to_thread(baseline_mod.run_baseline, body)
-
-
 def _sse(event: str, data) -> str:
     return f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"
 
@@ -188,6 +178,25 @@ def sample(filename: str):
     if not p.exists():
         raise HTTPException(404)
     return FileResponse(p)
+
+
+@app.get("/api/city-score")
+async def city_score(request: Request, artist_id: str = "", city: str = ""):
+    if _rate_limited(_client_ip(request)):
+        raise HTTPException(429, "rate limit exceeded")
+    if not artist_id.strip() or not city.strip():
+        raise HTTPException(400, "artist_id and city are required")
+    hm = await asyncio.to_thread(qloo.heatmap, artist_id.strip(), city.strip())
+    if hm["ok"] and hm["aggregate"]:
+        agg = hm["aggregate"]
+        score = round(agg["mean_affinity_rank"] * 100, 1)
+        reason = (
+            f"Artist overperforms geographically across {agg['points']} grid points "
+            f"(mean affinity_rank {agg['mean_affinity_rank']:.2f})."
+        )
+        return {"city": city, "score": score, "reason": reason, "status": "scored"}
+    reason = f"No geographic affinity data for {city}." + (f" ({hm['error']})" if hm.get("error") else "")
+    return {"city": city, "score": None, "reason": reason, "status": "no_data"}
 
 
 # Static frontend (built by `npm run build`). Served at the end so /api wins.

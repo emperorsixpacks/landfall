@@ -19,22 +19,51 @@ export default function Results({ result, events = [], cities = [], error, onRes
   const [hoveredCity, setHoveredCity] = useState(null);
   const [toggles, setToggles] = useState({ markets: true, arcs: true, venues: true });
   const [copiedReport, setCopiedReport] = useState(false);
-  const [showBaseline, setShowBaseline] = useState(false);
-  const [baseline, setBaseline] = useState(null);
+  const [pendingCities, setPendingCities] = useState(new Set());
+  const [extraScores, setExtraScores] = useState({});
   const globeRef = useRef(null);
 
   const joinedMarkets = useMemo(
     () => joinMarketsToCities(result?.markets || [], cities),
     [result?.markets, cities]
   );
-  const ranked = useMemo(() => rankMarkets(joinedMarkets), [joinedMarkets]);
-  const venuesAvailable = hasVenueCoordinates(joinedMarkets);
+  const enrichedMarkets = useMemo(() => {
+    if (!Object.keys(extraScores).length) return joinedMarkets;
+    return joinedMarkets.map((m) =>
+      extraScores[m.city] ? { ...m, ...extraScores[m.city] } : m
+    );
+  }, [joinedMarkets, extraScores]);
+  const ranked = useMemo(() => rankMarkets(enrichedMarkets), [enrichedMarkets]);
+  const venuesAvailable = hasVenueCoordinates(enrichedMarkets);
   const selected = ranked.find((m) => m.city === selectedCity) || null;
 
   function handleSelect(city) {
     setSelectedCity((prev) => (prev === city ? null : city));
-    const m = ranked.find((x) => x.city === city);
+    // Fly to city — use ranked (scored) entry first, fall back to raw cities list for gray dots
+    const m = ranked.find((x) => x.city === city) || cities.find((x) => x.city === city);
     if (m) globeRef.current?.flyToCity(m);
+
+    // Lazy-fetch score for no-data or unknown cities
+    const rankedEntry = ranked.find((x) => x.city === city);
+    const alreadyScored = rankedEntry && rankedEntry.score != null;
+    const alreadyFetched = extraScores[city] !== undefined;
+    const isPending = pendingCities.has(city);
+    if (!alreadyScored && !alreadyFetched && !isPending) {
+      const artistId = result?.audience_profile?.entities?.[0]?.id;
+      if (!artistId) return;
+      setPendingCities((prev) => new Set([...prev, city]));
+      fetch(`/api/city-score?artist_id=${encodeURIComponent(artistId)}&city=${encodeURIComponent(city)}`)
+        .then((r) => r.json())
+        .then((data) => {
+          setExtraScores((prev) => ({ ...prev, [city]: data }));
+        })
+        .catch(() => {
+          setExtraScores((prev) => ({ ...prev, [city]: { city, score: null, reason: "Fetch failed.", status: "no_data" } }));
+        })
+        .finally(() => {
+          setPendingCities((prev) => { const s = new Set(prev); s.delete(city); return s; });
+        });
+    }
   }
 
   function saveImage() {
@@ -53,21 +82,6 @@ export default function Results({ result, events = [], cities = [], error, onRes
       setCopiedReport(true);
       setTimeout(() => setCopiedReport(false), 2000);
     } catch {}
-  }
-
-  async function loadBaseline() {
-    if (baseline) return;
-    const res = await fetch("/api/baseline", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        artist: result.artist,
-        song: result.song,
-        genre: null,
-        cities: (result.markets || []).map((m) => m.city),
-      }),
-    });
-    if (res.ok) setBaseline(await res.json());
   }
 
   if (!result) {
@@ -116,17 +130,6 @@ export default function Results({ result, events = [], cities = [], error, onRes
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => {
-              setShowBaseline((s) => !s);
-              if (!baseline) loadBaseline();
-            }}
-            className={`rounded-lg border px-4 py-2 text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-accent ${
-              showBaseline ? "border-accent bg-accent-subtle text-text" : "border-border-light bg-surface text-text-secondary hover:border-accent hover:text-text"
-            }`}
-          >
-            Compare with plain LLM
-          </button>
           <button
             onClick={copyReport}
             className="rounded-lg border border-border-light bg-surface px-4 py-2 text-sm text-text-secondary hover:border-accent hover:text-text transition-all focus:outline-none focus:ring-2 focus:ring-accent"
@@ -277,9 +280,6 @@ export default function Results({ result, events = [], cities = [], error, onRes
         <SoundToTaste bridge={result.bridge} />
       </section>
 
-      {/* Plain-LLM baseline comparison */}
-      {showBaseline && <BaselineComparison baseline={baseline} main={result} />}
-
       {/* Target markets & Globe */}
       <section className="rounded-xl border border-border bg-panel p-5 shadow-soft space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -306,6 +306,12 @@ export default function Results({ result, events = [], cities = [], error, onRes
             >
               Save image
             </button>
+            <button
+              onClick={() => { globeRef.current?.resetView(); setSelectedCity(null); }}
+              className="rounded border border-border px-2 py-0.5 hover:text-text"
+            >
+              Reset view
+            </button>
           </div>
         </div>
 
@@ -313,7 +319,7 @@ export default function Results({ result, events = [], cities = [], error, onRes
           <div className="lg:col-span-3 rounded-md overflow-hidden" style={{ minHeight: 420 }}>
             <GlobeContainer
               ref={globeRef}
-              markets={joinedMarkets}
+              markets={enrichedMarkets}
               origin={result.origin}
               selectedCity={selectedCity}
               hoveredCity={hoveredCity}
@@ -322,13 +328,14 @@ export default function Results({ result, events = [], cities = [], error, onRes
               showMarkets={toggles.markets}
               showArcs={toggles.arcs}
               showVenues={toggles.venues}
+              allCities={cities}
               height={420}
             />
           </div>
 
           <div className="max-h-[440px] overflow-hidden rounded-md border border-border lg:col-span-2">
             <MarketList
-              markets={joinedMarkets}
+              markets={enrichedMarkets}
               selectedCity={selectedCity}
               hoveredCity={hoveredCity}
               onSelect={handleSelect}
@@ -343,6 +350,7 @@ export default function Results({ result, events = [], cities = [], error, onRes
           <MarketDetail
             market={selected}
             collaborators={result.collaborators || []}
+            isPending={pendingCities.has(selectedCity)}
             onClose={() => setSelectedCity(null)}
           />
         )}
@@ -422,7 +430,7 @@ function Legend() {
   );
 }
 
-function MarketDetail({ market, collaborators, onClose }) {
+function MarketDetail({ market, collaborators, isPending, onClose }) {
   const noData = market.status === "no_data" || market.score == null;
   return (
     <div className="mt-3 rounded-md border border-border bg-raised p-4 text-xs space-y-2">
@@ -430,7 +438,10 @@ function MarketDetail({ market, collaborators, onClose }) {
         <h3 className="text-sm font-semibold text-text">
           {market.city}
           {market.country && <span className="ml-1 text-muted text-xs">({market.country})</span>}
-          <span className="num ml-2 text-accent font-semibold">{noData ? "—" : market.score}</span>
+          {isPending && noData
+            ? <span className="num ml-2 text-muted animate-pulse">fetching…</span>
+            : <span className="num ml-2 text-accent font-semibold">{noData ? "—" : market.score}</span>
+          }
         </h3>
         <button onClick={onClose} className="text-muted hover:text-text">close</button>
       </div>
@@ -849,61 +860,5 @@ function Trace({ events = [] }) {
         ))}
       </div>
     </details>
-  );
-}
-
-function BaselineComparison({ baseline, main }) {
-  if (!baseline) {
-    return (
-      <section className="rounded-xl border border-border bg-panel p-5 shadow-soft">
-        <p className="text-sm text-muted">Loading plain-LLM baseline…</p>
-      </section>
-    );
-  }
-  return (
-    <section className="rounded-card border border-danger/40 bg-panel p-5 space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <h2 className="text-label text-muted">LLM only (no agent)</h2>
-          <span className="rounded-pill border border-border px-2 py-0.5 text-label text-muted">no code scoring</span>
-        </div>
-        <span className="num text-muted">
-          self-reported {baseline.fit_score ?? "—"}/100 · agent scored {main.fit_score ?? "—"}/100
-        </span>
-      </div>
-
-      <p className="text-small text-secondary">
-        The LLM gets the same Qloo taste data, but none of the agent's structured analysis or
-        code scoring — its numbers are self-reported; the agent's are computed from Qloo data.
-      </p>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div>
-          <p className="text-label text-muted">Blurb</p>
-          <p className="mt-1 text-small leading-relaxed text-text">{baseline.blurb}</p>
-        </div>
-        <div>
-          <p className="text-label text-muted">Markets (guessed)</p>
-          <ul className="mt-1 space-y-1">
-            {(baseline.markets || []).map((m, i) => (
-              <li key={i} className="flex justify-between text-small">
-                <span className="text-text">{m.city}</span>
-                <span className="num text-muted">{m.score ?? "—"}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div>
-          <p className="text-label text-muted">Collaborators (guessed)</p>
-          <div className="mt-1 flex flex-wrap gap-1.5">
-            {(baseline.collaborators || []).map((c, i) => (
-              <span key={i} className="rounded-pill border border-border px-2 py-0.5 text-small text-muted">
-                {c.name}
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
   );
 }
