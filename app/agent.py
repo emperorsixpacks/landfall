@@ -299,8 +299,6 @@ async def _finish(state: dict, request: dict):
             artist_entity["id"],
             limit=10,
             exclude=[artist_entity["id"]],
-            demographics=state["audience"].get("demographics"),
-            trending=True,
         )
         if rel["ok"]:
             for e in rel["entities"]:
@@ -332,7 +330,17 @@ async def _finish(state: dict, request: dict):
             state["audio"] = None
             yield tr("analyze_audio", "LISTEN", {"song_id": state["song_id"]}, f"Audio analysis skipped: {res.get('error')}", "error")
 
-    # COMPARE: describe sound + resolve comparables.
+    # LYRICS: transcribe + theme tags (best-effort, runs before describe_sound so
+    # the descriptors/comparables can reflect what the song is actually about).
+    if config.lyrics_ready() and state.get("song_id"):
+        lr = lyrics.analyze_lyrics(state["song_id"])
+        state["lyrics"] = lr
+        if lr.get("ok"):
+            yield tr("analyze_lyrics", "LYRICS", {"song_id": state["song_id"]}, f"Lyrics: {len(lr.get('themes', []))} theme(s), {len(lr.get('tags', []))} tag(s) resolved.")
+        else:
+            yield tr("analyze_lyrics", "LYRICS", {}, f"Lyrics skipped: {lr.get('reason', 'no transcript')}")
+
+    # COMPARE: describe sound + resolve comparables (uses lyrics themes/mood).
     if state.get("audio") and state["audio"].get("ok") and not state.get("sound"):
         tools._describe_sound({"features": state["audio"]}, state)
         yield tr("describe_sound", "COMPARE", {}, f"Sound described with {len((state.get('sound') or {}).get('descriptors', []))} descriptor(s).")
@@ -349,23 +357,15 @@ async def _finish(state: dict, request: dict):
     else:
         state["bridge"] = {"tags": [], "trace": []}
 
-    # LYRICS: transcribe + theme tags (best-effort, merged into the bridge tags).
-    if config.lyrics_ready() and state.get("song_id"):
-        lr = lyrics.analyze_lyrics(state["song_id"])
-        state["lyrics"] = lr
-        if lr.get("ok"):
-            existing = {t.get("id") for t in bridge_tags}
-            for t in lr.get("tags", []):
-                if t.get("id") not in existing:
-                    bridge_tags.append(t)
-                    existing.add(t.get("id"))
-            state["bridge"]["tags"] = bridge_tags
-            yield tr(
-                "analyze_lyrics", "LYRICS", {"song_id": state["song_id"]},
-                f"Lyrics: {len(lr.get('themes', []))} theme(s), {len(lr.get('tags', []))} tag(s) resolved.",
-            )
-        else:
-            yield tr("analyze_lyrics", "LYRICS", {}, f"Lyrics skipped: {lr.get('reason', 'no transcript')}")
+    # Merge lyrics theme tags into the bridge tags (same signal pool).
+    lr = state.get("lyrics") or {}
+    if lr.get("ok"):
+        existing = {t.get("id") for t in bridge_tags}
+        for t in lr.get("tags", []):
+            if t.get("id") not in existing:
+                bridge_tags.append(t)
+                existing.add(t.get("id"))
+        state["bridge"]["tags"] = bridge_tags
 
     # Origin (home city) for the globe's arcs — best-effort if the agent skipped it.
     if state["artist_name"] and not state.get("origin"):
@@ -569,10 +569,14 @@ def _blurb(state, score) -> str:
     tags = [t.get("name", "") for t in state["audience"]["tags"][:5]]
     popularity = state.get("catalog", {}).get("popularity")
     genres = state.get("catalog", {}).get("genres", [])[:3]
+    lyrics_info = state.get("lyrics") or {}
+    lyr_themes = lyrics_info.get("themes", [])
+    lyr_mood = lyrics_info.get("mood", "")
     prompt = (
         f"Write a 2-3 sentence release blurb for a new song by {artist}, framed for their audience. "
         f"Sound descriptors: {descriptors or '(none)'}. Audience taste tags: {tags or '(none)'}. "
-        f"Predicted fit: {score['fit'] if score.get('fit') is not None else 'n/a'}/100. "
+        + (f"Lyrical themes: {lyr_themes or '(none)'}. Lyrical mood: {lyr_mood or '(none)'}. " if lyr_themes or lyr_mood else "")
+        + f"Predicted fit: {score['fit'] if score.get('fit') is not None else 'n/a'}/100. "
         + (f"Spotify popularity: {popularity}/100. " if popularity is not None else "")
         + (f"Genres: {', '.join(genres)}. " if genres else "")
         + "Use only this evidence; do not invent facts. Reply JSON: {\"blurb\": \"...\"}"

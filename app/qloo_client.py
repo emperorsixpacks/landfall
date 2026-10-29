@@ -214,7 +214,12 @@ def demographics(entity_id: str) -> dict:
     return {"ok": out["ok"], "demographics": demo, "error": out["error"]}
 
 
-def related(entity_type: str, entity_id: str, limit: int = 10, exclude: list[str] | None = None) -> dict:
+def related(
+    entity_type: str,
+    entity_id: str,
+    limit: int = 10,
+    exclude: list[str] | None = None,
+) -> dict:
     params: dict[str, Any] = {"signal.interests.entities": entity_id, "take": limit}
     if exclude:
         params["filter.exclude.entities"] = ",".join(exclude)
@@ -248,22 +253,28 @@ def affinity_between(signal_entity_id: str, target_ids: list[str], tags: list[st
 
 
 def venues(entity_id: str, city: str, limit: int = 6, tags: list[str] | None = None) -> dict:
-    """Place/venue results correlated with an entity in a city, with coordinates.
+    """Place/venue results correlated with an entity in a city.
 
-    Only returned if the place response carries geocode coordinates; we never
-    geocode venues ourselves."""
+    Tags are passed as signal.interests.tags (bias toward matching audience taste),
+    NOT filter.tags (which hard-filters by tag and returns nothing for music tags).
+    Places without coordinates are still returned for the list view; coords are
+    included when available for globe plotting."""
     if config.QLOO_MODE == "mock":
         return mock_data.venues(entity_id, city, limit)
-    params: dict[str, Any] = {"signal.interests.entities": entity_id, "filter.geocode.name": city, "take": limit}
+    params: dict[str, Any] = {
+        "signal.interests.entities": entity_id,
+        "filter.geocode.name": city,
+        "take": limit,
+    }
     if tags:
-        params["filter.tags"] = ",".join(tags)
+        params["signal.interests.tags"] = ",".join(tags)
     out = insights("urn:entity:place", **params)
     places = []
     if out["ok"]:
         for p in out["results"].get("entities", []):
             lat, lng = _coords(p)
-            if lat is not None and lng is not None:
-                places.append({"name": p.get("name"), "lat": lat, "lng": lng})
+            place = {"name": p.get("name"), "lat": lat, "lng": lng}
+            places.append(place)
     return {"ok": out["ok"] and bool(places), "places": places, "error": out["error"]}
 
 

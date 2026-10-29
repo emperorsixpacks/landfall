@@ -159,16 +159,23 @@ def _find_artist(args, state) -> str:
     state["catalog"]["top_songs"] = a.get("top_songs", [])
     state["catalog"]["spotify_top_songs"] = a.get("spotify_top_songs", [])
     state["catalog"]["related_names"] = [r for r in a.get("related", []) if r]
+    state["catalog"]["spotify_related"] = a.get("spotify_related", [])
+    state["catalog"]["popularity"] = a.get("popularity")
     state["catalog"]["description"] = a.get("description")
     state["catalog"]["albums"] = a.get("albums", [])
     state["catalog"]["genres"] = a.get("genres", [])
     state["catalog"]["image"] = a.get("image")
     state.setdefault("evidence", {})[f"yt:{a['name']}"] = (
         f"{len(a.get('top_songs', []))} top songs, {len(a.get('related', []))} related"
+        + (f", Spotify popularity {a['popularity']}" if a.get("popularity") is not None else "")
     )
+    sp_related_count = len(a.get("spotify_related", []))
     return (
         f"Found '{a['name']}' via {res['source']}: "
-        f"{len(a.get('top_songs', []))} top songs, {len(a.get('related', []))} related artists."
+        f"{len(a.get('top_songs', []))} top songs, {len(a.get('related', []))} related artists"
+        + (f", {sp_related_count} Spotify related" if sp_related_count else "")
+        + (f", popularity {a['popularity']}/100" if a.get("popularity") is not None else "")
+        + "."
     )
 
 
@@ -331,19 +338,26 @@ def _describe_sound(args, state) -> str:
     candidates = sorted(
         set(
             list(catalog.get("related_names", []))
+            + [r["name"] for r in catalog.get("spotify_related", []) if r.get("name")]
             + [e["name"] for e in state.get("entities", []) if e.get("name")]
             + [e["name"] for e in state.get("related_entities", []) if e.get("name")]
             + ([state.get("genre_tag")] if state.get("genre_tag") else [])
         )
     )
 
+    lyrics_info = state.get("lyrics") or {}
+    lyr_themes = lyrics_info.get("themes", [])
+    lyr_mood = lyrics_info.get("mood", "")
+
     prompt = (
-        "You describe a new song from its audio features only. Use a constrained vocabulary. "
+        "You describe a new song from its audio features AND its lyrical themes. Use a constrained vocabulary. "
         f"Allowed descriptors (pick 3 to 5): {', '.join(ALLOWED_DESCRIPTORS)}. "
         f"Tempo band from: {', '.join(TEMPO_BANDS)}. Energy band from: {', '.join(ENERGY_BANDS)}. "
         f"Comparables MUST come from this list only (pick 0 to 3): {', '.join(candidates) if candidates else '(none available)'}. "
         "If no comparable fits, return an empty comparables array. Do not invent artist names. "
         f"Audio features: {features}. "
+        f"Lyrical themes: {lyr_themes or '(none)'}. Lyrical mood: {lyr_mood or '(none)'}. "
+        "Choose descriptors that reflect BOTH the sound and the lyrical mood (an anxious or dark theme should surface as 'dark' or 'brooding', not 'warm'). "
         'Reply JSON: {"descriptors":[...], "tempo_band":"...", "energy_band":"...", "comparables":[...]}'
     )
     out = llm.chat_json(
