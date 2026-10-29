@@ -29,6 +29,7 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
     showVenues = true,
     interactive = true,
     height = 460,
+    allCities = [],
   },
   ref
 ) {
@@ -114,7 +115,7 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
     flyToCity(m) {
       const g = globeEl.current;
       if (g && m && m.lat != null && m.lng != null) {
-        g.pointOfView({ lat: m.lat, lng: m.lng, altitude: 1.1 }, 800);
+        g.pointOfView({ lat: m.lat, lng: m.lng, altitude: 0.55 }, 800);
       }
     },
     resetView() {
@@ -150,7 +151,8 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
 
   const ringsData = [];
   if (selectedCity) {
-    const m = ranked.find((r) => r.city === selectedCity);
+    const m = ranked.find((r) => r.city === selectedCity)
+      || allCities.find((c) => c.city === selectedCity);
     if (m && m.lat != null) ringsData.push({ ...m, isSelected: true });
   }
   // No-data markets render as small hollow gray rings.
@@ -188,8 +190,8 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
         pointsData={scoredPoints}
         pointLat={(d) => d.lat}
         pointLng={(d) => d.lng}
-        pointAltitude={(d) => (d.isNoData ? 0.008 : 0.015 + (d.score ?? 0) / 100 * 0.25)}
-        pointRadius={(d) => (d.isNoData ? 0.15 : 0.3 + (d.score ?? 0) / 100 * 1.3)}
+        pointAltitude={(d) => (d.isNoData ? 0.004 : 0.006 + (d.score ?? 0) / 100 * 0.08)}
+        pointRadius={(d) => (d.isNoData ? 0.12 : 0.25 + (d.score ?? 0) / 100 * 0.8)}
         pointColor={(d) => (d.isNoData ? COLORS.noData : scoreToColor(d.score, d.rank))}
         pointLabel={(d) => {
           if (d.isNoData) {
