@@ -35,6 +35,9 @@ YOUTUBE_AUDIENCE_ENABLED = (
 SPOTIFY_CLIENT_ID = os.environ.get("SPOTIFY_CLIENT_ID", "")
 SPOTIFY_CLIENT_SECRET = os.environ.get("SPOTIFY_CLIENT_SECRET", "")
 
+# --- Lyrics (Groq Whisper transcription + LLM theme extraction) ---------------
+LYRICS_ENABLED = os.environ.get("LYRICS_ENABLED", "true").lower() == "true"
+
 # --- Agent ------------------------------------------------------------------
 MAX_STEPS = 14
 TIME_BUDGET_SECONDS = 120.0
@@ -86,3 +89,7 @@ def llm_ready() -> bool:
 
 def spotify_ready() -> bool:
     return bool(SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET)
+
+
+def lyrics_ready() -> bool:
+    return LYRICS_ENABLED and bool(LLM_API_KEY and LLM_BASE_URL)

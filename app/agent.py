@@ -8,7 +8,7 @@ from typing import Any
 
 import rapidfuzz
 
-from . import audio, bridge, cities, config, http_log, llm, qloo_client as qloo, scoring, tools
+from . import audio, bridge, cities, config, http_log, llm, lyrics, qloo_client as qloo, scoring, tools
 
 SYSTEM_PROMPT = (
     "You plan music releases using Qloo taste data. Call exactly one tool per turn "
@@ -294,7 +294,14 @@ async def _finish(state: dict, request: dict):
 
     # Resolve related artists in Qloo (for catalog + collaborators).
     if artist_entity:
-        rel = qloo.related("urn:entity:artist", artist_entity["id"], limit=10, exclude=[artist_entity["id"]])
+        rel = qloo.related(
+            "urn:entity:artist",
+            artist_entity["id"],
+            limit=10,
+            exclude=[artist_entity["id"]],
+            demographics=state["audience"].get("demographics"),
+            trending=True,
+        )
         if rel["ok"]:
             for e in rel["entities"]:
                 e["type"] = "artist"
@@ -341,6 +348,24 @@ async def _finish(state: dict, request: dict):
         yield tr("sound_to_tags", "BRIDGE", {"features": True}, f"Sound-to-taste: {len(bridge_tags)} tag(s) resolved.")
     else:
         state["bridge"] = {"tags": [], "trace": []}
+
+    # LYRICS: transcribe + theme tags (best-effort, merged into the bridge tags).
+    if config.lyrics_ready() and state.get("song_id"):
+        lr = lyrics.analyze_lyrics(state["song_id"])
+        state["lyrics"] = lr
+        if lr.get("ok"):
+            existing = {t.get("id") for t in bridge_tags}
+            for t in lr.get("tags", []):
+                if t.get("id") not in existing:
+                    bridge_tags.append(t)
+                    existing.add(t.get("id"))
+            state["bridge"]["tags"] = bridge_tags
+            yield tr(
+                "analyze_lyrics", "LYRICS", {"song_id": state["song_id"]},
+                f"Lyrics: {len(lr.get('themes', []))} theme(s), {len(lr.get('tags', []))} tag(s) resolved.",
+            )
+        else:
+            yield tr("analyze_lyrics", "LYRICS", {}, f"Lyrics skipped: {lr.get('reason', 'no transcript')}")
 
     # Origin (home city) for the globe's arcs — best-effort if the agent skipped it.
     if state["artist_name"] and not state.get("origin"):
@@ -470,9 +495,9 @@ def _market_from_heatmap(city, hm) -> dict:
 
 
 def _attach_venues(state, artist_entity) -> None:
-    """Best-effort venue lookup for the top scored markets only (keeps call count low)."""
+    """Best-effort venue lookup for the top scored markets (keeps call count low)."""
     tag_ids = bridge.tag_ids((state.get("bridge") or {}).get("tags", []))
-    for market in state["markets"][:3]:
+    for market in state["markets"][:5]:
         if market["status"] != "scored":
             continue
         v = qloo.venues(artist_entity["id"], market["city"], limit=6, tags=tag_ids)
@@ -542,11 +567,15 @@ def _blurb(state, score) -> str:
     artist = state.get("artist_name") or "The artist"
     descriptors = (state.get("sound") or {}).get("descriptors", [])
     tags = [t.get("name", "") for t in state["audience"]["tags"][:5]]
+    popularity = state.get("catalog", {}).get("popularity")
+    genres = state.get("catalog", {}).get("genres", [])[:3]
     prompt = (
         f"Write a 2-3 sentence release blurb for a new song by {artist}, framed for their audience. "
         f"Sound descriptors: {descriptors or '(none)'}. Audience taste tags: {tags or '(none)'}. "
         f"Predicted fit: {score['fit'] if score.get('fit') is not None else 'n/a'}/100. "
-        "Use only this evidence; do not invent facts. Reply JSON: {\"blurb\": \"...\"}"
+        + (f"Spotify popularity: {popularity}/100. " if popularity is not None else "")
+        + (f"Genres: {', '.join(genres)}. " if genres else "")
+        + "Use only this evidence; do not invent facts. Reply JSON: {\"blurb\": \"...\"}"
     )
     out = llm.chat_json(
         [{"role": "user", "content": prompt}],
@@ -584,6 +613,13 @@ def _assemble(state, request, score, blurb):
             "tags": (state.get("bridge") or {}).get("tags", []),
             "trace": (state.get("bridge") or {}).get("trace", []),
         },
+        "lyrics": {
+            "themes": (state.get("lyrics") or {}).get("themes", []),
+            "mood": (state.get("lyrics") or {}).get("mood"),
+            "language": (state.get("lyrics") or {}).get("language"),
+            "tags": (state.get("lyrics") or {}).get("tags", []),
+            "transcript": (state.get("lyrics") or {}).get("transcript", ""),
+        },
         "audience_profile": {
             "tags": [{"name": t.get("name"), "id": t.get("id")} for t in state["audience"]["tags"]],
             "entities": [{"name": e.get("name"), "id": e.get("id")} for e in state.get("related_entities", [])],
@@ -593,8 +629,10 @@ def _assemble(state, request, score, blurb):
             "albums": state.get("catalog", {}).get("albums", []),
             "genres": state.get("catalog", {}).get("genres", []),
             "image": state.get("catalog", {}).get("image"),
+            "popularity": state.get("catalog", {}).get("popularity"),
             "top_songs": state.get("catalog", {}).get("top_songs", []),
             "spotify_top_songs": state.get("catalog", {}).get("spotify_top_songs", []),
+            "spotify_related": state.get("catalog", {}).get("spotify_related", []),
         },
         "markets": state["markets"],
         "collaborators": [{"name": c["name"], "why": c["why"]} for c in state["collaborators"]],

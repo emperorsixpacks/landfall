@@ -280,6 +280,11 @@ export default function Results({ result, events = [], cities = [], error, onRes
         <SoundToTaste bridge={result.bridge} />
       </section>
 
+      {/* Lyrics themes */}
+      {result.lyrics && (result.lyrics.tags?.length > 0 || result.lyrics.themes?.length > 0) && (
+        <LyricsPanel lyrics={result.lyrics} />
+      )}
+
       {/* Target markets & Globe */}
       <section className="rounded-xl border border-border bg-panel p-5 shadow-soft space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -592,8 +597,8 @@ function AudienceProfile({ profile }) {
 }
 
 function ArtistCard({ artist, catalog }) {
-  const ytSongs = (catalog.top_songs || []).filter((s) => s.title).slice(0, 5).map((s) => s.title);
-  const spSongs = (catalog.spotify_top_songs || []).filter((s) => s.title).slice(0, 5).map((s) => s.title);
+  const ytSongs = (catalog.top_songs || []).filter((s) => s.title).slice(0, 5);
+  const spSongs = (catalog.spotify_top_songs || []).filter((s) => s.title).slice(0, 5).map((s) => ({ title: s.title }));
   return (
     <section className="rounded-xl border border-border bg-panel p-5 shadow-soft">
       <div className="flex items-center gap-4">
@@ -604,29 +609,44 @@ function ArtistCard({ artist, catalog }) {
             className="h-14 w-14 shrink-0 rounded-full border border-border object-cover"
           />
         )}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-semibold text-text">{artist}</span>
           <span className="rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
             Spotify · YouTube
           </span>
+          {catalog.popularity != null && (
+            <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted num">
+              Spotify popularity <span className="text-text font-semibold">{catalog.popularity}</span>/100
+            </span>
+          )}
+          {catalog.genres?.length > 0 && (
+            <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted">
+              {catalog.genres.slice(0, 2).join(" · ")}
+            </span>
+          )}
         </div>
       </div>
       <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <SongColumn label="Top songs · YouTube Music" songs={ytSongs} />
+        <SongColumn label="Top songs · YouTube Music" songs={ytSongs} showViews />
         <SongColumn label="Top songs · Spotify" songs={spSongs} />
       </div>
     </section>
   );
 }
 
-function SongColumn({ label, songs }) {
+function SongColumn({ label, songs, showViews = false }) {
   return (
     <div>
       <span className="text-[10px] uppercase tracking-wider text-muted">{label}</span>
       {songs.length > 0 ? (
-        <ol className="mt-1 list-inside list-decimal text-xs">
-          {songs.map((t, i) => (
-            <li key={i} className="truncate text-text">{t}</li>
+        <ol className="mt-1 list-inside list-decimal text-xs space-y-0.5">
+          {songs.map((s, i) => (
+            <li key={i} className="flex items-baseline justify-between gap-2">
+              <span className="truncate text-text">{s.title || s}</span>
+              {showViews && s.views && (
+                <span className="num shrink-0 text-[10px] text-muted">{s.views}</span>
+              )}
+            </li>
           ))}
         </ol>
       ) : (
@@ -860,5 +880,40 @@ function Trace({ events = [] }) {
         ))}
       </div>
     </details>
+  );
+}
+
+function LyricsPanel({ lyrics }) {
+  const tags = lyrics.tags || [];
+  const themes = lyrics.themes || [];
+  return (
+    <section className="rounded-xl border border-border bg-panel p-5 shadow-soft space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">Lyrics themes</h2>
+        {(lyrics.language || lyrics.mood) && (
+          <span className="text-small text-muted">
+            {lyrics.language ? `${lyrics.language}` : ""}
+            {lyrics.mood ? ` · ${lyrics.mood}` : ""}
+          </span>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {tags.length > 0 ? (
+          tags.map((t, i) => (
+            <span key={i} className="rounded-pill border border-accent/40 px-2.5 py-1 text-small text-accent">{t.name}</span>
+          ))
+        ) : (
+          themes.map((t, i) => (
+            <span key={i} className="rounded-pill border border-border px-2.5 py-1 text-small text-muted">{t}</span>
+          ))
+        )}
+      </div>
+      {lyrics.transcript && (
+        <details className="group">
+          <summary className="cursor-pointer text-small text-muted hover:text-text">Show transcript (estimated)</summary>
+          <p className="mt-2 text-small leading-relaxed text-muted">{lyrics.transcript}</p>
+        </details>
+      )}
+    </section>
   );
 }
