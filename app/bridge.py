@@ -50,7 +50,20 @@ def _satisfies(value, op: str, threshold) -> bool:
     return False
 
 
-def sound_to_tags(features: dict) -> dict:
+# Mood words that should suppress contradicting audio tags. A fast, major-key song
+# can still be melancholic — lyrics win over naive tempo/mode rules.
+MOOD_CONTRADICTS = {
+    "melancholic": {"upbeat", "uplifting", "energetic", "euphoric", "bright"},
+    "dark": {"upbeat", "uplifting", "bright", "euphoric"},
+    "sad": {"upbeat", "uplifting", "energetic"},
+    "brooding": {"upbeat", "uplifting", "bright"},
+    "anxious": {"upbeat", "uplifting", "mellow", "calm"},
+    "euphoric": {"melancholic", "dark", "brooding", "mellow"},
+    "joyful": {"melancholic", "dark", "brooding"},
+}
+
+
+def sound_to_tags(features: dict, mood: str | None = None) -> dict:
     """Return {ok, tags: [{id,name,term}], bridge_trace: [{feature,value,rule,search_term,qloo_tag_id|null,used_in[]}]}."""
     if not features:
         return {"ok": False, "tags": [], "bridge_trace": []}
@@ -94,6 +107,17 @@ def sound_to_tags(features: dict) -> dict:
                 "used_in": [],
             }
         )
+
+    # Lyrics mood overrides naive audio tags: drop tags that contradict the mood.
+    if mood:
+        drop = MOOD_CONTRADICTS.get(mood.lower(), set())
+        if drop:
+            tags = [t for t in tags if (t.get("name") or "").lower() not in drop]
+            for entry in trace:
+                if (entry.get("qloo_tag_name") or "").lower() in drop:
+                    entry["qloo_tag_id"] = None
+                    entry["qloo_tag_name"] = None
+                    entry["dropped_reason"] = "mood conflict"
 
     return {"ok": bool(tags), "tags": tags, "bridge_trace": trace}
 

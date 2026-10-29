@@ -349,7 +349,7 @@ async def _finish(state: dict, request: dict):
     bridge_tags: list[dict] = []
     bridge_trace: list[dict] = []
     if state.get("audio") and state["audio"].get("ok"):
-        br = bridge.sound_to_tags(state["audio"])
+        br = bridge.sound_to_tags(state["audio"], mood=(state.get("lyrics") or {}).get("mood"))
         bridge_tags = br.get("tags") or []
         bridge_trace = br.get("bridge_trace") or []
         state["bridge"] = {"tags": bridge_tags, "trace": bridge_trace}
