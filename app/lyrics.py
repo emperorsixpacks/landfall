@@ -34,15 +34,23 @@ def transcribe(song_id: str):
             return None
         d = r.json()
         text = (d.get("text") or "").strip()
-        segments = [
-            {
-                "start": round(s.get("start", 0), 2),
-                "end": round(s.get("end", 0), 2),
-                "text": (s.get("text") or "").strip(),
-            }
-            for s in (d.get("segments") or [])
-            if (s.get("text") or "").strip()
-        ]
+        segments = []
+        for s in (d.get("segments") or []):
+            seg_text = (s.get("text") or "").strip()
+            if not seg_text:
+                continue
+            logp = s.get("avg_logprob", -1.0) or -1.0
+            no_speech = s.get("no_speech_prob", 0.0) or 0.0
+            conf = round(max(0.0, min(1.0, 0.6 * (logp + 2.0) / 2.0 + 0.4 * (1.0 - no_speech))), 2)
+            segments.append(
+                {
+                    "id": s.get("id", len(segments)),
+                    "start": round(s.get("start", 0), 2),
+                    "end": round(s.get("end", 0), 2),
+                    "text": seg_text,
+                    "conf": conf,
+                }
+            )
         return {"text": text, "segments": segments}
     except Exception:  # noqa: BLE001
         return None

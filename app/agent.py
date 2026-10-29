@@ -716,6 +716,8 @@ def _assemble(state, request, score, blurb):
             "key_confidence": (state["audio"] or {}).get("key_confidence"),
             "loudness_lufs": (state["audio"] or {}).get("loudness_lufs"),
             "sections": (state["audio"] or {}).get("sections", []),
+            "energy_curve": ((state["audio"] or {}).get("energy") or {}).get("curve", []),
+            "hooks": (state["audio"] or {}).get("hooks", []),
         },
         "trace": [e for e in state.get("trace", [])],
     }

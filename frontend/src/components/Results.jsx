@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import GlobeContainer from "./GlobeContainer.jsx";
 import MarketList from "./MarketList.jsx";
 import SoundToTaste from "./SoundToTaste.jsx";
+import LyricsLens from "./LyricsLens.jsx";
 import { useCountUp, useReducedMotion } from "../hooks/useMotion";
 import {
   COLORS,
@@ -280,9 +281,9 @@ export default function Results({ result, events = [], cities = [], error, onRes
         <SoundToTaste bridge={result.bridge} />
       </section>
 
-      {/* Lyrics themes */}
+      {/* Lyrics lens */}
       {result.lyrics && (result.lyrics.tags?.length > 0 || result.lyrics.themes?.length > 0 || result.lyrics.segments?.length > 0 || result.lyrics.entities?.length > 0) && (
-        <LyricsPanel lyrics={result.lyrics} songId={result.song} />
+        <LyricsLens lyrics={result.lyrics} audioFeatures={result.audio_features || {}} songId={result.song} />
       )}
 
       {/* Target markets & Globe */}
@@ -896,73 +897,5 @@ function Trace({ events = [] }) {
         ))}
       </div>
     </details>
-  );
-}
-
-function LyricsPanel({ lyrics, songId }) {
-  const tags = lyrics.tags || [];
-  const segments = lyrics.segments || [];
-  const audioRef = useRef(null);
-
-  function seek(t) {
-    if (audioRef.current) {
-      audioRef.current.currentTime = t;
-      audioRef.current.play();
-    }
-  }
-
-  const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
-
-  return (
-    <section className="rounded-xl border border-border bg-panel p-5 shadow-soft space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">Lyrics</h2>
-        {(lyrics.language || lyrics.mood) && (
-          <span className="text-small text-muted">
-            {lyrics.language}{lyrics.mood ? ` · ${lyrics.mood}` : ""}
-          </span>
-        )}
-      </div>
-
-      {tags.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {tags.map((t, i) => (
-            <span key={i} className="rounded-pill border border-accent/40 px-2.5 py-1 text-small text-accent">{t.name}</span>
-          ))}
-        </div>
-      )}
-
-      {(lyrics.entities || []).length > 0 && (
-        <div>
-          <p className="mb-1.5 text-label text-muted">Named in lyrics · resolved in Qloo</p>
-          <div className="flex flex-wrap gap-2">
-            {lyrics.entities.map((e, i) => (
-              <span key={i} className="rounded-pill border border-positive/40 px-2.5 py-1 text-small text-positive">
-                {e.name} <span className="text-muted">· {e.type}</span>
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {songId && <audio ref={audioRef} controls src={`/api/audio/${songId}`} className="w-full" />}
-
-      {segments.length > 0 ? (
-        <div className="max-h-64 space-y-1 overflow-y-auto rounded-md bg-raised p-3">
-          {segments.map((s, i) => (
-            <button key={i} onClick={() => seek(s.start)} className="flex w-full items-baseline gap-3 text-left text-small hover:text-text">
-              <span className="num shrink-0 text-muted">{fmt(s.start)}</span>
-              <span className="text-secondary">{s.text}</span>
-            </button>
-          ))}
-        </div>
-      ) : (
-        lyrics.transcript && <p className="text-small leading-relaxed text-secondary">{lyrics.transcript}</p>
-      )}
-
-      {segments.length > 0 && (
-        <p className="text-[11px] text-muted">Transcript is estimated (Whisper). Click a line to play from there.</p>
-      )}
-    </section>
   );
 }
