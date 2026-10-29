@@ -350,11 +350,21 @@ async def _finish(state: dict, request: dict):
     # TARGET: markets (heatmap, streamed as market_scored) + collaborators.
     state["markets"] = []
     if artist_entity:
-        for city in state["cities"]:
+        async def _score_one(city: str):
             t0 = time.monotonic()
-            hm = qloo.heatmap(artist_entity["id"], city)
+            hm = await asyncio.to_thread(qloo.heatmap, artist_entity["id"], city)
             latency = int((time.monotonic() - t0) * 1000)
             market = _market_from_heatmap(city, hm)
+            return city, market, latency
+
+        scored = await asyncio.gather(
+            *[_score_one(city) for city in state["cities"]],
+            return_exceptions=True,
+        )
+        for item in scored:
+            if isinstance(item, BaseException):
+                continue
+            city, market, latency = item
             state["markets"].append(market)
             state.setdefault("trace", []).append(
                 {
