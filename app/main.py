@@ -170,6 +170,16 @@ def clip(filename: str):
     return FileResponse(p, media_type="audio/mpeg")
 
 
+@app.get("/api/audio/{song_id}")
+def audio_file(song_id: str):
+    if ".." in song_id or "/" in song_id:
+        raise HTTPException(400)
+    p = audio._file_for(song_id)
+    if p is None:
+        raise HTTPException(404)
+    return FileResponse(p)
+
+
 @app.get("/api/samples/{filename}")
 def sample(filename: str):
     if ".." in filename or "/" in filename:

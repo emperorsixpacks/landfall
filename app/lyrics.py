@@ -16,24 +16,36 @@ GROQ_TRANSCRIBE = "https://api.groq.com/openai/v1/audio/transcriptions"
 WHISPER_MODEL = "whisper-large-v3-turbo"
 
 
-def transcribe(song_id: str) -> str:
+def transcribe(song_id: str):
+    """Return {text, segments} or None. Segments carry start/end timestamps."""
     src = audio._file_for(song_id)
     if src is None:
-        return ""
+        return None
     try:
         with open(src, "rb") as f:
             r = httpx.post(
                 GROQ_TRANSCRIBE,
                 headers={"Authorization": f"Bearer {config.LLM_API_KEY}"},
                 files={"file": (src.name, f, "application/octet-stream")},
-                data={"model": WHISPER_MODEL},
+                data={"model": WHISPER_MODEL, "response_format": "verbose_json"},
                 timeout=config.TOOL_TIMEOUT_SECONDS,
             )
         if r.status_code != 200:
-            return ""
-        return (r.json().get("text") or "").strip()
+            return None
+        d = r.json()
+        text = (d.get("text") or "").strip()
+        segments = [
+            {
+                "start": round(s.get("start", 0), 2),
+                "end": round(s.get("end", 0), 2),
+                "text": (s.get("text") or "").strip(),
+            }
+            for s in (d.get("segments") or [])
+            if (s.get("text") or "").strip()
+        ]
+        return {"text": text, "segments": segments}
     except Exception:  # noqa: BLE001
-        return ""
+        return None
 
 
 def _extract_themes(transcript: str) -> dict:
@@ -74,17 +86,23 @@ def analyze_lyrics(song_id: str) -> dict:
     if not config.lyrics_ready():
         return {"ok": False, "reason": "lyrics disabled or no LLM key"}
 
-    transcript = transcribe(song_id)
-    if not transcript or len(transcript) < 5:
-        return {"ok": False, "reason": "no usable transcript", "transcript": transcript}
+    tr = transcribe(song_id)
+    if not tr or len(tr.get("text", "")) < 5:
+        return {
+            "ok": False,
+            "reason": "no usable transcript",
+            "transcript": tr.get("text", "") if tr else "",
+            "segments": tr.get("segments", []) if tr else [],
+        }
 
-    data = _extract_themes(transcript)
+    data = _extract_themes(tr["text"])
     themes = [t for t in (data.get("themes") or []) if t][:8]
     tags = _resolve_themes(themes)
 
     return {
         "ok": bool(tags),
-        "transcript": transcript,
+        "transcript": tr["text"],
+        "segments": tr["segments"],
         "themes": themes,
         "mood": data.get("mood") or "",
         "language": data.get("language") or "",

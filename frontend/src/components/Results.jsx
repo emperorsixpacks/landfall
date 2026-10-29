@@ -281,8 +281,8 @@ export default function Results({ result, events = [], cities = [], error, onRes
       </section>
 
       {/* Lyrics themes */}
-      {result.lyrics && (result.lyrics.tags?.length > 0 || result.lyrics.themes?.length > 0) && (
-        <LyricsPanel lyrics={result.lyrics} />
+      {result.lyrics && (result.lyrics.tags?.length > 0 || result.lyrics.themes?.length > 0 || result.lyrics.segments?.length > 0) && (
+        <LyricsPanel lyrics={result.lyrics} songId={result.song} />
       )}
 
       {/* Target markets & Globe */}
@@ -883,36 +883,56 @@ function Trace({ events = [] }) {
   );
 }
 
-function LyricsPanel({ lyrics }) {
+function LyricsPanel({ lyrics, songId }) {
   const tags = lyrics.tags || [];
-  const themes = lyrics.themes || [];
+  const segments = lyrics.segments || [];
+  const audioRef = useRef(null);
+
+  function seek(t) {
+    if (audioRef.current) {
+      audioRef.current.currentTime = t;
+      audioRef.current.play();
+    }
+  }
+
+  const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
   return (
     <section className="rounded-xl border border-border bg-panel p-5 shadow-soft space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">Lyrics themes</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">Lyrics</h2>
         {(lyrics.language || lyrics.mood) && (
           <span className="text-small text-muted">
-            {lyrics.language ? `${lyrics.language}` : ""}
-            {lyrics.mood ? ` · ${lyrics.mood}` : ""}
+            {lyrics.language}{lyrics.mood ? ` · ${lyrics.mood}` : ""}
           </span>
         )}
       </div>
-      <div className="flex flex-wrap gap-2">
-        {tags.length > 0 ? (
-          tags.map((t, i) => (
+
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {tags.map((t, i) => (
             <span key={i} className="rounded-pill border border-accent/40 px-2.5 py-1 text-small text-accent">{t.name}</span>
-          ))
-        ) : (
-          themes.map((t, i) => (
-            <span key={i} className="rounded-pill border border-border px-2.5 py-1 text-small text-muted">{t}</span>
-          ))
-        )}
-      </div>
-      {lyrics.transcript && (
-        <details className="group">
-          <summary className="cursor-pointer text-small text-muted hover:text-text">Show transcript (estimated)</summary>
-          <p className="mt-2 text-small leading-relaxed text-muted">{lyrics.transcript}</p>
-        </details>
+          ))}
+        </div>
+      )}
+
+      {songId && <audio ref={audioRef} controls src={`/api/audio/${songId}`} className="w-full" />}
+
+      {segments.length > 0 ? (
+        <div className="max-h-64 space-y-1 overflow-y-auto rounded-md bg-raised p-3">
+          {segments.map((s, i) => (
+            <button key={i} onClick={() => seek(s.start)} className="flex w-full items-baseline gap-3 text-left text-small hover:text-text">
+              <span className="num shrink-0 text-muted">{fmt(s.start)}</span>
+              <span className="text-secondary">{s.text}</span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        lyrics.transcript && <p className="text-small leading-relaxed text-secondary">{lyrics.transcript}</p>
+      )}
+
+      {segments.length > 0 && (
+        <p className="text-[11px] text-muted">Transcript is estimated (Whisper). Click a line to play from there.</p>
       )}
     </section>
   );

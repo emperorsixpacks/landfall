@@ -619,6 +619,7 @@ def _assemble(state, request, score, blurb):
             "language": (state.get("lyrics") or {}).get("language"),
             "tags": (state.get("lyrics") or {}).get("tags", []),
             "transcript": (state.get("lyrics") or {}).get("transcript", ""),
+            "segments": (state.get("lyrics") or {}).get("segments", []),
         },
         "audience_profile": {
             "tags": [{"name": t.get("name"), "id": t.get("id")} for t in state["audience"]["tags"]],
