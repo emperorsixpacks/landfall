@@ -281,7 +281,7 @@ export default function Results({ result, events = [], cities = [], error, onRes
       </section>
 
       {/* Lyrics themes */}
-      {result.lyrics && (result.lyrics.tags?.length > 0 || result.lyrics.themes?.length > 0 || result.lyrics.segments?.length > 0) && (
+      {result.lyrics && (result.lyrics.tags?.length > 0 || result.lyrics.themes?.length > 0 || result.lyrics.segments?.length > 0 || result.lyrics.entities?.length > 0) && (
         <LyricsPanel lyrics={result.lyrics} songId={result.song} />
       )}
 
@@ -579,21 +579,31 @@ function AudienceProfile({ profile }) {
               Object.entries(demo.gender).map(([k, v]) => (
                 <div key={k} className="flex justify-between rounded bg-raised px-3 py-1.5">
                   <span className="capitalize text-muted">{k}</span>
-                  <span className="num text-text">{v}</span>
+                  <span className={`num ${v >= 0 ? "text-positive" : "text-muted"}`}>{fmtAffinity(v)}</span>
                 </div>
               ))}
             {demo.age &&
               Object.entries(demo.age).map(([k, v]) => (
                 <div key={k} className="flex justify-between rounded bg-raised px-3 py-1.5">
                   <span className="text-muted">{k.replace(/_/g, " ")}</span>
-                  <span className="num text-text">{v}</span>
+                  <span className={`num ${v >= 0 ? "text-positive" : "text-muted"}`}>{fmtAffinity(v)}</span>
                 </div>
               ))}
           </div>
+          <p className="mt-2 text-[10px] leading-relaxed text-muted">
+            Affinity vs the average audience: positive over-indexes, negative under-indexes.
+          </p>
         </div>
       )}
     </div>
   );
+}
+
+function fmtAffinity(v) {
+  if (v == null) return "—";
+  const n = Number(v);
+  const r = Math.round(n * 100) / 100;
+  return `${r > 0 ? "+" : ""}${r.toFixed(2)}`;
 }
 
 function ArtistCard({ artist, catalog }) {
@@ -677,7 +687,7 @@ function Discography({ catalog }) {
             <span className="truncate text-text">{a.name}</span>
             <span className="num ml-2 shrink-0 text-muted">
               {a.release_date ? a.release_date.slice(0, 4) : "—"}
-              {a.total_tracks != null && <span className="ml-1 text-[10px]">· {a.total_tracks}t</span>}
+              {a.total_tracks != null && <span className="ml-1 text-[10px]">· {a.total_tracks} tracks</span>}
             </span>
           </div>
         ))}
@@ -913,6 +923,19 @@ function LyricsPanel({ lyrics, songId }) {
           {tags.map((t, i) => (
             <span key={i} className="rounded-pill border border-accent/40 px-2.5 py-1 text-small text-accent">{t.name}</span>
           ))}
+        </div>
+      )}
+
+      {(lyrics.entities || []).length > 0 && (
+        <div>
+          <p className="mb-1.5 text-label text-muted">Named in lyrics · resolved in Qloo</p>
+          <div className="flex flex-wrap gap-2">
+            {lyrics.entities.map((e, i) => (
+              <span key={i} className="rounded-pill border border-positive/40 px-2.5 py-1 text-small text-positive">
+                {e.name} <span className="text-muted">· {e.type}</span>
+              </span>
+            ))}
+          </div>
         </div>
       )}
 

@@ -375,9 +375,12 @@ async def _finish(state: dict, request: dict):
     # TARGET: markets (heatmap, streamed as market_scored) + collaborators.
     state["markets"] = []
     if artist_entity:
+        signal_ids = _signal_entities(state, artist_entity)
+        signal_str = ",".join(signal_ids)
+
         async def _score_one(city: str):
             t0 = time.monotonic()
-            hm = await asyncio.to_thread(qloo.heatmap, artist_entity["id"], city)
+            hm = await asyncio.to_thread(qloo.heatmap, signal_str, city)
             latency = int((time.monotonic() - t0) * 1000)
             market = _market_from_heatmap(city, hm)
             return city, market, latency
@@ -479,6 +482,14 @@ async def _finish(state: dict, request: dict):
     )
 
     yield {"type": "final", "result": _assemble(state, request, score, blurb)}
+
+
+def _signal_entities(state, artist_entity):
+    ids = [artist_entity["id"]] if artist_entity else []
+    for e in (state.get("lyrics") or {}).get("entities", []):
+        if e.get("id") and e["id"] not in ids:
+            ids.append(e["id"])
+    return ids
 
 
 def _market_from_heatmap(city, hm) -> dict:
@@ -622,6 +633,7 @@ def _assemble(state, request, score, blurb):
             "mood": (state.get("lyrics") or {}).get("mood"),
             "language": (state.get("lyrics") or {}).get("language"),
             "tags": (state.get("lyrics") or {}).get("tags", []),
+            "entities": (state.get("lyrics") or {}).get("entities", []),
             "transcript": (state.get("lyrics") or {}).get("transcript", ""),
             "segments": (state.get("lyrics") or {}).get("segments", []),
         },

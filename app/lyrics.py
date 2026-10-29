@@ -50,14 +50,17 @@ def transcribe(song_id: str):
 
 def _extract_themes(transcript: str) -> dict:
     prompt = (
-        "You analyze song lyrics. Extract the core themes, mood, and language. "
+        "You analyze song lyrics. Extract: (a) abstract themes, (b) the mood, (c) the language, "
+        "and (d) any SPECIFIC named entities mentioned (people, places, brands, products, events). "
         f"Lyrics: {transcript[:3000]}. "
-        'Reply JSON only: {"themes": ["3-8 short theme words or phrases"], "mood": "one or two words", "language": "..."}. '
-        "Themes should be simple words a taste graph would tag, e.g. hustle, celebration, street life, heartbreak, faith."
+        'Reply JSON only: {"themes": ["3-8 short theme words"], "mood": "one or two words", "language": "...", '
+        '"entities": [{"name": "specific named thing", "type": "person|place|brand|event|product"}]}. '
+        "Themes should be simple words a taste graph would tag. Entities must be specific named things "
+        "(e.g. 'Lagos', 'Nike', 'Muhammad Ali', 'Champagne'), not generic words; return [] if none."
     )
     return llm.chat_json(
         [{"role": "user", "content": prompt}],
-        fallback={"themes": [], "mood": "", "language": ""},
+        fallback={"themes": [], "mood": "", "language": "", "entities": []},
     )
 
 
@@ -82,6 +85,37 @@ def _resolve_themes(themes: list[str]) -> list[dict]:
     return tags
 
 
+_ENTITY_TYPE_MAP = {
+    "person": "urn:entity:person",
+    "place": "urn:entity:place",
+    "brand": "urn:entity:brand",
+    "event": "urn:entity:person",
+    "product": "urn:entity:brand",
+}
+
+
+def _resolve_entities(entities: list[dict]) -> list[dict]:
+    resolved = []
+    seen: set[str] = set()
+    for e in entities:
+        name = (e.get("name") or "").strip()
+        if not name or name.lower() in seen:
+            continue
+        seen.add(name.lower())
+        qtype = _ENTITY_TYPE_MAP.get(e.get("type", "person"), "urn:entity:person")
+        r = qloo.search(name, [qtype], limit=3)
+        best = None
+        best_ratio = 0
+        for c in (r.get("candidates") or []):
+            ratio = rapidfuzz.fuzz.ratio(name.lower(), (c.get("name") or "").lower())
+            if ratio >= 85 and ratio > best_ratio:
+                best = c
+                best_ratio = ratio
+        if best:
+            resolved.append({"name": best["name"], "id": best["id"], "type": e.get("type", "person"), "mentioned_as": name})
+    return resolved
+
+
 def analyze_lyrics(song_id: str) -> dict:
     if not config.lyrics_ready():
         return {"ok": False, "reason": "lyrics disabled or no LLM key"}
@@ -98,13 +132,15 @@ def analyze_lyrics(song_id: str) -> dict:
     data = _extract_themes(tr["text"])
     themes = [t for t in (data.get("themes") or []) if t][:8]
     tags = _resolve_themes(themes)
+    entities = _resolve_entities(data.get("entities") or [])
 
     return {
-        "ok": bool(tags),
+        "ok": bool(tags) or bool(entities),
         "transcript": tr["text"],
         "segments": tr["segments"],
         "themes": themes,
         "mood": data.get("mood") or "",
         "language": data.get("language") or "",
         "tags": tags,
+        "entities": entities,
     }
