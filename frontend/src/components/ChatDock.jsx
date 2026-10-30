@@ -368,10 +368,10 @@ function useMemoStarter(result) {
   return React.useMemo(() => {
     const chips = [];
     const markets = (result.markets || []).filter((m) => m.score != null);
-    if (markets[0]) chips.push(`Why is ${markets[0].city} ranked first?`);
+    if (markets[0]) chips.push(`Why is ${markets[0].country} ranked first?`);
     if ((result.clips || []).length > 0) chips.push("Which clip should I post first?");
     if (result.fit_score != null) chips.push("What drove the fit score?");
-    if (markets[1]) chips.push(`Compare ${markets[0].city} and ${markets[1].city}`);
+    if (markets[1]) chips.push(`Compare ${markets[0].country} and ${markets[1].country}`);
     return chips.slice(0, 4);
   }, [result]);
 }

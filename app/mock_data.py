@@ -183,11 +183,11 @@ def affinity_between(signal_entity_id, target_ids) -> dict:
     return {"ok": True, "scores": scores, "error": None, "sample_data": True}
 
 
-def heatmap(entity_id: str, city: str) -> dict:
+def heatmap(entity_id: str, location: str) -> dict:
     key = _key_by_id(entity_id)
     if not key:
         return {"ok": False, "aggregate": None, "points": 0, "error": "no sample entity", "sample_data": True}
-    loc = (city or "").lower().strip()
+    loc = (location or "").lower().strip()
     base = _CITIES.get(loc)
     if base is None:
         # Deterministic synthetic score for any location not in the sample map
@@ -209,15 +209,15 @@ def heatmap(entity_id: str, city: str) -> dict:
     }
 
 
-def venues(entity_id: str, city: str, limit: int = 6) -> dict:
+def venues(entity_id: str, location: str, limit: int = 6) -> dict:
     key = _key_by_id(entity_id)
-    if not key or city.lower().strip() not in _CITIES:
+    if not key or location.lower().strip() not in _CITIES:
         return {"ok": False, "places": [], "error": "no sample venues", "sample_data": True}
     return {
         "ok": True,
         "places": [
-            {"name": f"{city.title()} Arena", "lat": 0.0, "lng": 0.0},
-            {"name": f"{city.title()} Live Hall", "lat": 0.0, "lng": 0.0},
+            {"name": f"{location.title()} Arena", "lat": 0.0, "lng": 0.0},
+            {"name": f"{location.title()} Live Hall", "lat": 0.0, "lng": 0.0},
         ][:limit],
         "error": None,
         "sample_data": True,

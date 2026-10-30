@@ -43,7 +43,7 @@ export default function Home({ config, allCountries = [], onRun, onError, prefil
   // Default to Global = every country once the list loads.
   useEffect(() => {
     if (allCountries.length) {
-      setCountries(allCountries.map((c) => c.city));
+      setCountries(allCountries.map((c) => c.country));
     }
   }, [allCountries]);
 
@@ -130,7 +130,7 @@ export default function Home({ config, allCountries = [], onRun, onError, prefil
     if (s) { setSongId(s.song_id); setSongName(s.name); } else { setSongId(null); setSongName(null); }
     setIsSampleTrack(true);
     setRightsConfirmed(true);
-    const globals = allCountries.map((c) => c.city);
+    const globals = allCountries.map((c) => c.country);
     setCountries(globals);
     setActivePreset("Global");
     onRun({ artist: "Tems", song_id: s ? s.song_id : null, song_name: s ? s.name : null, countries: globals, sounds_like: [], genres: [] });
@@ -199,7 +199,7 @@ export default function Home({ config, allCountries = [], onRun, onError, prefil
   function selectPreset(p) {
     setActivePreset(p.label);
     if (p.label === "Global") {
-      setCountries(allCountries.map((c) => c.city));
+      setCountries(allCountries.map((c) => c.country));
     } else {
       setCountries(p.countries);
     }
@@ -215,16 +215,16 @@ export default function Home({ config, allCountries = [], onRun, onError, prefil
 
   const countryPool = useMemo(() => {
     if (allCountries.length > 0) return allCountries;
-    return PRESETS[0].countries.map((c) => ({ city: c, country: "" }));
+    return PRESETS[0].countries.map((c) => ({ country: c }));
   }, [allCountries]);
 
   const displayedCountries = useMemo(() => {
     const set = new Set(countries);
     if (marketSearch.trim()) {
       const q = marketSearch.toLowerCase();
-      return countryPool.filter((c) => c.city.toLowerCase().includes(q) || (c.country && c.country.toLowerCase().includes(q)));
+      return countryPool.filter((c) => c.country.toLowerCase().includes(q) || (c.country && c.country.toLowerCase().includes(q)));
     }
-    return countryPool.filter((c) => set.has(c.city));
+    return countryPool.filter((c) => set.has(c.country));
   }, [countryPool, countries, marketSearch]);
 
   const hasArtist = Boolean(resolvedArtist);
@@ -432,14 +432,14 @@ export default function Home({ config, allCountries = [], onRun, onError, prefil
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {displayedCountries.map((c) => {
-                const on = countries.includes(c.city);
+                const on = countries.includes(c.country);
                 return (
                   <button
-                    key={c.city}
-                    onClick={() => toggleCountry(c.city)}
+                    key={c.country}
+                    onClick={() => toggleCountry(c.country)}
                     className={`rounded-pill border px-3 py-1 text-small ${on ? "border-accent bg-accent/10 text-text" : "border-border text-muted hover:border-accent"}`}
                   >
-                    {on && <span className="mr-1 text-accent">✓</span>}{c.city}
+                    {on && <span className="mr-1 text-accent">✓</span>}{c.country}
                   </button>
                 );
               })}

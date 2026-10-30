@@ -52,13 +52,13 @@ export function scoreToColor(score, rank) {
   }
 }
 
-export function joinMarketsToCities(markets, cities) {
-  const byName = new Map(cities.map((c) => [c.city.toLowerCase(), c]));
+export function joinMarketsToCountries(markets, countries) {
+  const byName = new Map(countries.map((c) => [c.country.toLowerCase(), c]));
   const joined = [];
   for (const m of markets || []) {
-    const c = byName.get(String(m.city || "").toLowerCase());
+    const c = byName.get(String(m.country || "").toLowerCase());
     if (!c) {
-      console.warn("unknown city, skipping:", m.city);
+      console.warn("unknown country, skipping:", m.country);
       continue;
     }
     joined.push({ ...m, lat: c.lat, lng: c.lng, country: c.country });
@@ -240,7 +240,7 @@ const REGION_MAP = {
   Lebanon: "Middle East",
 };
 
-export function getCityRegion(country) {
+export function getRegion(country) {
   if (!country) return "Other";
   return REGION_MAP[country] || "Other";
 }
@@ -284,10 +284,10 @@ export function generateReleaseStrategyMarkdown(result) {
   const ranked = rankMarkets(result.markets || []);
   const scoredMarkets = ranked.filter((m) => m.status !== "no_data" && m.score != null);
   if (scoredMarkets.length) {
-    md += `| Rank | City | Score | Geographic Insights |\n`;
+    md += `| Rank | Country | Score | Geographic Insights |\n`;
     md += `|---|---|---|---|\n`;
     scoredMarkets.forEach((m, idx) => {
-      md += `| ${idx + 1} | ${m.city} | ${m.score} | ${m.reason || "High affinity overperformance"} |\n`;
+      md += `| ${idx + 1} | ${m.country} | ${m.score} | ${m.reason || "High affinity overperformance"} |\n`;
     });
     md += `\n`;
   } else {

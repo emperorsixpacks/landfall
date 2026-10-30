@@ -252,18 +252,18 @@ def affinity_between(signal_entity_id: str, target_ids: list[str], tags: list[st
     return {"ok": out["ok"] and bool(scores), "scores": scores, "error": out["error"]}
 
 
-def venues(entity_id: str, city: str, limit: int = 6, tags: list[str] | None = None) -> dict:
-    """Place/venue results correlated with an entity in a city.
+def venues(entity_id: str, location: str, limit: int = 6, tags: list[str] | None = None) -> dict:
+    """Place/venue results correlated with an entity in a location.
 
     Tags are passed as signal.interests.tags (bias toward matching audience taste),
     NOT filter.tags (which hard-filters by tag and returns nothing for music tags).
     Places without coordinates are still returned for the list view; coords are
     included when available for globe plotting."""
     if config.QLOO_MODE == "mock":
-        return mock_data.venues(entity_id, city, limit)
+        return mock_data.venues(entity_id, location, limit)
     params: dict[str, Any] = {
         "signal.interests.entities": entity_id,
-        "filter.geocode.name": city,
+        "filter.geocode.name": location,
         "take": limit,
     }
     if tags:
@@ -290,13 +290,13 @@ def _coords(raw: dict):
     return lat, lng
 
 
-def heatmap(entity_id: str, city: str, tags: list[str] | None = None) -> dict:
-    """Geographic affinity of an entity within a city (urn:heatmap, documented in
+def heatmap(entity_id: str, location: str, tags: list[str] | None = None) -> dict:
+    """Geographic affinity of an entity within a location (urn:heatmap, documented in
     the matrix with signal.interests.entities + filter.location.query). Optional
     tags bias the signal toward the song's taste profile (lyrics/audio)."""
     if config.QLOO_MODE == "mock":
-        return mock_data.heatmap(entity_id, city)
-    params: dict[str, Any] = {"filter.location.query": city, "signal.interests.entities": entity_id}
+        return mock_data.heatmap(entity_id, location)
+    params: dict[str, Any] = {"filter.location.query": location, "signal.interests.entities": entity_id}
     if tags:
         params["signal.interests.tags"] = ",".join(tags)
     out = insights("urn:heatmap", **params)

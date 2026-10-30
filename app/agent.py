@@ -12,7 +12,7 @@ from . import audio, bridge, cities, config, http_log, llm, lyrics, qloo_client 
 
 SYSTEM_PROMPT = (
     "You plan music releases using Qloo taste data. Call exactly one tool per turn "
-    "and reply with JSON only. Never invent artists, cities, scores, or numbers; use "
+    "and reply with JSON only. Never invent artists, countries, scores, or numbers; use "
     "only tool results. If a lookup returns nothing, try one variant (alternate spelling, "
     "then related artists), then move on and note the gap. Do not repeat a call with "
     "identical arguments. Follow the stage order. Reply {\"final\": true} only when "
@@ -402,30 +402,30 @@ async def _finish(state: dict, request: dict):
         signal_ids = _signal_entities(state, artist_entity)
         signal_str = ",".join(signal_ids)
 
-        async def _score_one(city: str):
+        async def _score_one(country: str):
             t0 = time.monotonic()
-            hm = await asyncio.to_thread(qloo.heatmap, signal_str, city)
+            hm = await asyncio.to_thread(qloo.heatmap, signal_str, country)
             latency = int((time.monotonic() - t0) * 1000)
-            market = _market_from_heatmap(city, hm)
-            return city, market, latency
+            market = _market_from_heatmap(country, hm)
+            return country, market, latency
 
         scored = await asyncio.gather(
-            *[_score_one(city) for city in state["countries"]],
+            *[_score_one(country) for country in state["countries"]],
             return_exceptions=True,
         )
         for item in scored:
             if isinstance(item, BaseException):
                 continue
-            city, market, latency = item
+            country, market, latency = item
             state["markets"].append(market)
             state.setdefault("trace", []).append(
                 {
                     "step": state["steps_used"],
                     "stage": "TARGET",
                     "tool": "score_market",
-                    "why": "rank this city",
-                    "args_summary": city,
-                    "result_summary": f"{city}: {market['score']}" if market["status"] == "scored" else f"{city}: no data",
+                    "why": "rank this country",
+                    "args_summary": country,
+                    "result_summary": f"{country}: {market['score']}" if market["status"] == "scored" else f"{country}: no data",
                     "latency_ms": latency,
                     "status": "ok" if market["status"] == "scored" else "error",
                     "source": "fallback",
@@ -437,13 +437,13 @@ async def _finish(state: dict, request: dict):
                     "step": state["steps_used"],
                     "stage": "TARGET",
                     "tool": "score_market",
-                    "why": "rank this city",
-                    "args_summary": city,
-                    "result_summary": f"{city}: {market['score']}" if market["status"] == "scored" else f"{city}: no data",
+                    "why": "rank this country",
+                    "args_summary": country,
+                    "result_summary": f"{country}: {market['score']}" if market["status"] == "scored" else f"{country}: no data",
                     "latency_ms": latency,
                     "status": "ok" if market["status"] == "scored" else "error",
                     "source": "fallback",
-                    "market_scored": {"city": city, "score": market["score"]},
+                    "market_scored": {"country": country, "score": market["score"]},
                 },
             }
         state["markets"].sort(key=lambda m: (m["score"] is None, -(m["score"] or 0)))
@@ -451,7 +451,7 @@ async def _finish(state: dict, request: dict):
     else:
         state["markets"] = [
             {
-                "city": c,
+                "country": c,
                 "score": None,
                 "reason": "Artist not resolved in Qloo, so no geographic affinity.",
                 "status": "no_data",
@@ -546,7 +546,7 @@ def _resolve_user_genres(genres):
     return out
 
 
-def _market_from_heatmap(city, hm) -> dict:
+def _market_from_heatmap(country, hm) -> dict:
     if hm["ok"] and hm["aggregate"]:
         agg = hm["aggregate"]
         score = round(agg["mean_affinity_rank"] * 100, 1)
@@ -560,7 +560,7 @@ def _market_from_heatmap(city, hm) -> dict:
         else:
             reason = "Fans of this artist are less concentrated here."
         return {
-            "city": city,
+            "country": country,
             "score": score,
             "reason": reason,
             "status": "scored",
@@ -570,8 +570,8 @@ def _market_from_heatmap(city, hm) -> dict:
             "popularity": agg.get("mean_popularity"),
             "venues": [],
         }
-    reason = f"No geographic affinity data for {city}." + (f" ({hm['error']})" if hm.get("error") else "")
-    return {"city": city, "score": None, "reason": reason, "status": "no_data", "venues": []}
+    reason = f"No geographic affinity data for {country}." + (f" ({hm['error']})" if hm.get("error") else "")
+    return {"country": country, "score": None, "reason": reason, "status": "no_data", "venues": []}
 
 
 def _attach_venues(state, artist_entity) -> None:
@@ -580,7 +580,7 @@ def _attach_venues(state, artist_entity) -> None:
     for market in state["markets"][:5]:
         if market["status"] != "scored":
             continue
-        v = qloo.venues(artist_entity["id"], market["city"], limit=6, tags=tag_ids)
+        v = qloo.venues(artist_entity["id"], market["country"], limit=6, tags=tag_ids)
         if v["ok"]:
             market["venues"] = v["places"]
     if tag_ids:

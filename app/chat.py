@@ -24,7 +24,7 @@ MAX_LIVE_PER_RUN = 6
 SYSTEM_PROMPT = (
     "You are Landfall's assistant. You answer questions about one finished release "
     "plan using ONLY the run's data and your tool results. Never invent artists, "
-    "cities, scores, tags, lyrics, or chart positions. If the data does not contain "
+    "countries, scores, tags, lyrics, or chart positions. If the data does not contain "
     "an answer, say \"That isn't in this run\" and say what is. Do NOT write source "
     "labels like (qloo) or (user) in your text; the evidence chips under your answer "
     "already mark each claim's source. Qloo values are affinity, not facts or chart "
@@ -33,7 +33,9 @@ SYSTEM_PROMPT = (
     "The run's actual lyric lines are provided in the context; quote them directly "
     "(with timestamps) whenever the user asks about a specific line or \"what part\" "
     "of the song. Do not answer lyric questions with themes alone when lines are "
-    "available. Be brief: 1 to 4 short paragraphs, plain language, no em dashes. "
+    "available. When asked about a specific market or country, call explain_market "
+    "with that country name rather than relying on the whole market list. "
+    "Be brief: 1 to 4 short paragraphs, plain language, no em dashes. "
     "Offer at most one follow-up."
 )
 
@@ -62,11 +64,11 @@ CHAT_TOOL_SCHEMAS: dict[str, dict] = {
         "args": {},
     },
     "explain_market": {
-        "description": "A city's score, reason, rank, and comparison to the median.",
-        "args": {"city": {"type": "str", "required": True}},
+        "description": "A country's score, reason, rank, and comparison to the median.",
+        "args": {"country": {"type": "str", "required": True}},
     },
     "compare_markets": {
-        "description": "Side-by-side comparison of two already-scored cities.",
+        "description": "Side-by-side comparison of two already-scored countries.",
         "args": {"a": {"type": "str", "required": True}, "b": {"type": "str", "required": True}},
     },
     "what_if_weights": {
@@ -77,7 +79,7 @@ CHAT_TOOL_SCHEMAS: dict[str, dict] = {
         },
     },
     "find_in_trace": {
-        "description": "Find trace steps matching a query (tool, city, tag, etc).",
+        "description": "Find trace steps matching a query (tool, country, tag, etc).",
         "args": {"query": {"type": "str", "required": True}},
     },
     "lyrics_themes": {
@@ -93,8 +95,8 @@ CHAT_TOOL_SCHEMAS: dict[str, dict] = {
         "args": {"page": {"type": "int"}},
     },
     "score_extra_market": {
-        "description": "Live-score one additional supported city via Qloo (max 2 per question, 6 per run).",
-        "args": {"city": {"type": "str", "required": True}},
+        "description": "Live-score one additional supported country via Qloo (max 2 per question, 6 per run).",
+        "args": {"country": {"type": "str", "required": True}},
     },
 }
 
@@ -113,17 +115,17 @@ def _artist_entity_id(ctx: dict) -> str | None:
     return None
 
 
-def _market(ctx: dict, city: str) -> dict | None:
+def _market(ctx: dict, country: str) -> dict | None:
     for m in (ctx["result"].get("markets") or []):
-        if (m.get("city") or "").lower() == city.lower():
+        if (m.get("country") or "").lower() == country.lower():
             return m
     return None
 
 
-def _rank(ctx: dict, city: str) -> int | None:
+def _rank(ctx: dict, country: str) -> int | None:
     scored = [m for m in (ctx["result"].get("markets") or []) if m.get("score") is not None]
     for i, m in enumerate(scored, 1):
-        if (m.get("city") or "").lower() == city.lower():
+        if (m.get("country") or "").lower() == country.lower():
             return i
     return None
 
@@ -135,6 +137,16 @@ def _median_scores(ctx: dict) -> float | None:
     s = sorted(scores)
     mid = len(s) // 2
     return s[mid] if len(s) % 2 else round((s[mid - 1] + s[mid]) / 2, 1)
+
+
+def _mentioned_market(message: str, result: dict) -> str | None:
+    """Return a run market's country name if the message mentions it."""
+    msg = (message or "").lower()
+    for m in (result.get("markets") or []):
+        name = m.get("country")
+        if name and name.lower() in msg:
+            return name
+    return None
 
 
 # --- tool handlers ------------------------------------------------------------
@@ -160,7 +172,10 @@ def _get_section(args, ctx):
         text = f"Sound-to-taste: {len(tags)} tag(s) resolved — " + ", ".join(t.get("name", "") for t in tags[:10])
     elif name == "markets":
         ranked = [m for m in (r.get("markets") or []) if m.get("score") is not None]
-        text = "Ranked markets: " + ", ".join(f"{m['city']} {m['score']}" for m in ranked[:8])
+        parts = [f"#{i + 1} {m['country']} {m['score']}" for i, m in enumerate(ranked)]
+        text = "Ranked markets: " + ", ".join(parts) if parts else "No scored markets."
+        if ranked:
+            text += f" (use explain_market for any specific market)"
     elif name == "audience":
         tags = (r.get("audience_profile") or {}).get("tags") or []
         ents = (r.get("audience_profile") or {}).get("entities") or []
@@ -197,12 +212,12 @@ def _explain_score(args, ctx):
 
 
 def _explain_market(args, ctx):
-    m = _market(ctx, args["city"])
+    m = _market(ctx, args["country"])
     if m is None:
-        return f"No market named '{args['city']}' in this run.", []
+        return f"No market named '{args['country']}' in this run.", []
     if m.get("score") is None:
-        return f"{m['city']}: {m.get('reason') or 'no Qloo data'} (no score).", [{"kind": "qloo", "label": m["city"], "ref": f"section:markets"}]
-    rank = _rank(ctx, m["city"])
+        return f"{m['country']}: {m.get('reason') or 'no Qloo data'} (no score).", [{"kind": "qloo", "label": m["country"], "ref": f"section:markets"}]
+    rank = _rank(ctx, m["country"])
     med = _median_scores(ctx)
     delta = round(m["score"] - med, 1) if med is not None else None
 
@@ -217,7 +232,7 @@ def _explain_market(args, ctx):
         qfacts.append(f"mean popularity {m['popularity']:.2f}")
     qstr = ("Qloo data: " + ", ".join(qfacts) + ". ") if qfacts else ""
 
-    wik = wiki.fetch_country_info(m["city"])
+    wik = wiki.fetch_country_info(m["country"])
     wstr = ""
     if wik:
         snippet = wik.get("description") or wik.get("extract")
@@ -225,13 +240,13 @@ def _explain_market(args, ctx):
             wstr = f"Wikipedia: {snippet}. "
 
     text = (
-        f"{m['city']} scores {m['score']}, ranked #{rank}. "
+        f"{m['country']} scores {m['score']}, ranked #{rank}. "
         + (f"Median is {med}; it is {delta:+} vs the median. " if delta is not None else "")
         + qstr + wstr
         + f"{m.get('reason') or ''}"
     )
-    ref = next((f"step:{s.get('step')}" for s in (ctx["result"].get("trace") or []) if s.get("tool") == "score_market" and (s.get("args_summary") or "").lower() == m["city"].lower()), f"section:markets")
-    return text, [{"kind": "qloo", "label": m["city"], "ref": ref}]
+    ref = next((f"step:{s.get('step')}" for s in (ctx["result"].get("trace") or []) if s.get("tool") == "score_market" and (s.get("args_summary") or "").lower() == m["country"].lower()), f"section:markets")
+    return text, [{"kind": "qloo", "label": m["country"], "ref": ref}]
 
 
 def _compare_markets(args, ctx):
@@ -242,11 +257,11 @@ def _compare_markets(args, ctx):
         return f"Not in this run: {', '.join(missing)}.", []
     def line(m):
         if m.get("score") is None:
-            return f"{m['city']}: no Qloo data"
-        return f"{m['city']}: {m['score']} ({m.get('reason') or ''})"
+            return f"{m['country']}: no Qloo data"
+        return f"{m['country']}: {m['score']} ({m.get('reason') or ''})"
     return f"{line(a)} vs {line(b)}.", [
-        {"kind": "qloo", "label": a["city"], "ref": f"section:markets"},
-        {"kind": "qloo", "label": b["city"], "ref": f"section:markets"},
+        {"kind": "qloo", "label": a["country"], "ref": f"section:markets"},
+        {"kind": "qloo", "label": b["country"], "ref": f"section:markets"},
     ]
 
 
@@ -352,9 +367,9 @@ def _get_lyrics(args, ctx):
 
 
 def _score_extra_market(args, ctx):
-    city = (args.get("city") or "").strip()
-    if city.lower() not in {c.lower() for c in cities.city_names()}:
-        return f"'{city}' is not a supported city in cities.json.", []
+    country = (args.get("country") or "").strip()
+    if country.lower() not in {c.lower() for c in cities.country_names()}:
+        return f"'{country}' is not a supported country.", []
     run_id = ctx["run_id"]
     if run_store.extra_market_used(run_id) >= MAX_LIVE_PER_RUN:
         return "Live lookups are capped at 6 per run.", []
@@ -363,18 +378,18 @@ def _score_extra_market(args, ctx):
     eid = _artist_entity_id(ctx)
     if not eid:
         return "The artist's Qloo entity is not available for a live lookup.", []
-    hm = qloo.heatmap(eid, city)
+    hm = qloo.heatmap(eid, country)
     ctx["_live_used"] = ctx.get("_live_used", 0) + 1
     run_store.bump_extra_market(run_id)
     if hm.get("ok") and hm.get("aggregate"):
         agg = hm["aggregate"]
         score = round(agg["mean_affinity_rank"] * 100, 1)
         text = (
-            f"Live Qloo heatmap for {city}: {score} (mean affinity_rank "
+            f"Live Qloo heatmap for {country}: {score} (mean affinity_rank "
             f"{agg['mean_affinity_rank']:.2f} across {agg['points']} grid points)."
         )
-        return text, [{"kind": "qloo", "label": city, "ref": f"section:markets"}]
-    return f"Qloo returned no geographic affinity for {city}." + (f" ({hm['error']})" if hm.get("error") else ""), []
+        return text, [{"kind": "qloo", "label": country, "ref": f"section:markets"}]
+    return f"Qloo returned no geographic affinity for {country}." + (f" ({hm['error']})" if hm.get("error") else ""), []
 
 
 CHAT_TOOLS: dict[str, Any] = {
@@ -430,7 +445,8 @@ def _tool_reference() -> str:
 
 
 def _run_summary(result: dict) -> str:
-    top = [(m["city"], m["score"]) for m in (result.get("markets") or []) if m.get("score") is not None][:5]
+    scored = [m for m in (result.get("markets") or []) if m.get("score") is not None]
+    top = [(m["country"], m["score"]) for m in scored[:5]]
     lyrics = result.get("lyrics") or {}
     segs = lyrics.get("segments") or []
     if segs:
@@ -442,7 +458,7 @@ def _run_summary(result: dict) -> str:
         lyric_text = f"(lyrics unavailable: {lyrics.get('reason') or 'no transcript'})"
     return (
         f"artist={result.get('artist')} fit={result.get('fit_score')} "
-        f"top_markets={top} descriptors={result.get('descriptors') or []} "
+        f"markets={len(scored)} scored, top={top} descriptors={result.get('descriptors') or []} "
         f"collaborators={[c['name'] for c in (result.get('collaborators') or [])]} "
         f"lyrics={lyric_text}"
     )
@@ -526,6 +542,17 @@ async def run_chat(request: dict):
     tool_results: list[str] = []
     evidence: list[dict] = []
 
+    # If the question names one of the run's markets, ground the answer on it
+    # deterministically (don't rely on the model choosing explain_market).
+    mentioned = _mentioned_market(message, result)
+    if mentioned:
+        yield {"type": "tool_start", "tool": "explain_market", "label": TOOL_LABELS["explain_market"]}
+        summary, ev = _explain_market({"country": mentioned}, ctx)
+        yield {"type": "tool_end", "tool": "explain_market", "summary": summary, "evidence": ev}
+        tool_results.append(f"explain_market: {summary}")
+        evidence.extend(ev)
+        called.add(("explain_market", json.dumps({"country": mentioned}, sort_keys=True)))
+
     for _ in range(MAX_CHAT_TOOLS):
         if time.monotonic() - t0 > CHAT_BUDGET_SECONDS:
             break
@@ -581,7 +608,7 @@ async def run_chat(request: dict):
             evidence.extend(ev)
             top = [m for m in (result.get("markets") or []) if m.get("score") is not None]
             if top:
-                s2, ev2 = _explain_market({"city": top[0]["city"]}, ctx)
+                s2, ev2 = _explain_market({"country": top[0]["country"]}, ctx)
                 fallback_parts.append(s2)
                 evidence.extend(ev2)
         else:

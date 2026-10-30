@@ -22,13 +22,13 @@ const WA_TO_MINE = {
 };
 const NO_DATA_COLOR = "#262E38";
 
-// forwardRef exposes: flyToCity(m), resetView(), saveImage(), startTour()
+// forwardRef exposes: flyToCountry(m), resetView(), saveImage(), startTour()
 const LandfallGlobe = forwardRef(function LandfallGlobe(
   {
     markets = [],
     origin = null,
-    selectedCity = null,
-    hoveredCity = null,
+    selectedCountry = null,
+    hoveredCountry = null,
     onSelect,
     onHover,
     showMarkets = true,
@@ -36,7 +36,7 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
     showVenues = true,
     interactive = true,
     height = 460,
-    allCities = [],
+    allCountries = [],
   },
   ref
 ) {
@@ -77,7 +77,7 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
   const nameToScore = useMemo(() => {
     const map = new Map();
     for (const m of ranked) {
-      if (m.score != null) map.set((m.city || "").toLowerCase().trim(), m);
+      if (m.score != null) map.set((m.country || "").toLowerCase().trim(), m);
     }
     return map;
   }, [ranked]);
@@ -142,7 +142,7 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
   }, [interactive, reduced, top3.length]);
 
   useImperativeHandle(ref, () => ({
-    flyToCity(m) {
+    flyToCountry(m) {
       const g = globeEl.current;
       if (g && m && m.lat != null && m.lng != null) {
         g.pointOfView({ lat: m.lat, lng: m.lng, altitude: 0.55 }, 800);
@@ -176,14 +176,14 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
       : [];
 
   const ringsData = [];
-  if (selectedCity) {
-    const m = ranked.find((r) => r.city === selectedCity)
-      || allCities.find((c) => c.city === selectedCity);
+  if (selectedCountry) {
+    const m = ranked.find((r) => r.country === selectedCountry)
+      || allCountries.find((c) => c.country === selectedCountry);
     if (m && m.lat != null) ringsData.push({ ...m, isSelected: true });
   }
 
   const venues = showVenues
-    ? ranked.flatMap((m) => (m.venues || []).map((v) => ({ ...v, market: m.city })))
+    ? ranked.flatMap((m) => (m.venues || []).map((v) => ({ ...v, market: m.country })))
     : [];
 
   return (
@@ -205,13 +205,13 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
         polygonLabel={(f) => {
           const m = featureToMarket(f);
           if (!m) return `<div class="globe-tip"><b>${f?.properties?.name || ""}</b><span>no data</span></div>`;
-          return `<div class="globe-tip"><b>${m.city}</b><span class="num">${m.score}</span><small>${m.reason || ""}</small></div>`;
+          return `<div class="globe-tip"><b>${m.country}</b><span class="num">${m.score}</span><small>${m.reason || ""}</small></div>`;
         }}
-        onPolygonHover={(f) => onHover && onHover(f ? (featureToMarket(f)?.city || null) : null)}
+        onPolygonHover={(f) => onHover && onHover(f ? (featureToMarket(f)?.country || null) : null)}
         onPolygonClick={(f) => {
           if (!f) return;
           const m = featureToMarket(f);
-          if (m && onSelect) onSelect(m.city);
+          if (m && onSelect) onSelect(m.country);
         }}
         arcsData={arcsData}
         arcColor={(d) => scoreToColor(d.score)}
@@ -223,9 +223,9 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
         labelsData={showMarkets ? top3 : []}
         labelLat={(d) => d.lat}
         labelLng={(d) => d.lng}
-        labelText={(d) => d.city}
+        labelText={(d) => d.country}
         labelLabel={(d) =>
-          `<div style="font-family:Inter,system-ui,sans-serif;font-size:13px;color:#1A1F36;background:rgba(255,255,255,0.98);padding:6px 10px;border-radius:8px;border:1px solid #E1E4E8;backdrop-filter:blur(12px);box-shadow:0 4px 16px rgba(0,0,0,0.1);">${d.city} <span style="font-family:'JetBrains Mono',monospace;color:#48BB78;font-weight:600;">${d.score}</span></div>`
+          `<div style="font-family:Inter,system-ui,sans-serif;font-size:13px;color:#1A1F36;background:rgba(255,255,255,0.98);padding:6px 10px;border-radius:8px;border:1px solid #E1E4E8;backdrop-filter:blur(12px);box-shadow:0 4px 16px rgba(0,0,0,0.1);">${d.country} <span style="font-family:'JetBrains Mono',monospace;color:#48BB78;font-weight:600;">${d.score}</span></div>`
         }
         labelSize={1.15}
         labelColor={() => "rgba(0,0,0,0)"}

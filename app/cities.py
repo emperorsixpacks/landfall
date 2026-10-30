@@ -1,5 +1,7 @@
-"""Our own city list (not Qloo data). Candidate markets are chosen from here;
-we never geocode through Qloo."""
+"""Our own city + country lists (not Qloo data).
+
+Cities are used for the artist's home city (find_home_city); countries are the
+release markets. We never geocode through Qloo."""
 from __future__ import annotations
 
 import json
@@ -44,14 +46,14 @@ def city_names() -> frozenset:
 
 @lru_cache(maxsize=1)
 def country_names() -> frozenset:
-    return frozenset(c["city"] for c in load_countries())
+    return frozenset(c["country"] for c in load_countries())
 
 
 def country_entry(name: str) -> dict | None:
     if not name:
         return None
     for c in load_countries():
-        if c["city"].lower() == name.lower():
+        if c["country"].lower() == name.lower():
             return c
     return None
 

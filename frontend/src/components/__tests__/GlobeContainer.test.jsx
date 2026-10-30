@@ -6,7 +6,7 @@ vi.mock("../lib/globeUtils", () => ({
   rankMarkets: (m) => m.map((x, i) => ({ ...x, rank: i })),
   scoreToColor: () => "#5B9DFF",
   hasVenueCoordinates: () => false,
-  joinMarketsToCities: (m) => m,
+  joinMarketsToCountries: (m) => m,
   COLORS: { base: "#15171C", land: "#262A33", low: "#3A404B", high: "#5B9DFF", top: "#4CC38A", noData: "#5A616D" },
 }));
 
@@ -16,7 +16,7 @@ describe("GlobeContainer fallback", () => {
   it("renders the SVG fallback when WebGL is unavailable", () => {
     const { container } = render(
       <GlobeContainer
-        markets={[{ city: "Lagos", lat: 6.5, lng: 3.3, score: 90, status: "scored", venues: [] }]}
+        markets={[{ country: "Nigeria", lat: 6.5, lng: 3.3, score: 90, status: "scored", venues: [] }]}
         origin={null}
       />
     );

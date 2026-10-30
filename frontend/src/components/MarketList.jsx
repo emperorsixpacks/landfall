@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { rankMarkets } from "../lib/globeUtils";
 import AskButton from "./AskButton.jsx";
 
-export default function MarketList({ markets = [], selectedCity, hoveredCity, onSelect, onHover }) {
+export default function MarketList({ markets = [], selectedCountry, hoveredCountry, onSelect, onHover }) {
   const [search, setSearch] = useState("");
   const ranked = useMemo(() => rankMarkets(markets), [markets]);
 
@@ -10,7 +10,7 @@ export default function MarketList({ markets = [], selectedCity, hoveredCity, on
     if (!search.trim()) return ranked;
     const q = search.toLowerCase();
     return ranked.filter(
-      (m) => m.city.toLowerCase().includes(q) || (m.country && m.country.toLowerCase().includes(q))
+      (m) => m.country.toLowerCase().includes(q) || (m.country && m.country.toLowerCase().includes(q))
     );
   }, [ranked, search]);
 
@@ -24,26 +24,26 @@ export default function MarketList({ markets = [], selectedCity, hoveredCity, on
           placeholder="Filter markets..."
           className="w-full rounded border border-border bg-raised px-2.5 py-1 text-xs text-text placeholder-muted/60 outline-none focus:border-accent"
         />
-        <span className="text-[10px] num text-muted shrink-0">{filtered.length} cities</span>
+        <span className="text-[10px] num text-muted shrink-0">{filtered.length} countries</span>
       </div>
 
       {/* List */}
       <ul className="flex-1 overflow-y-auto divide-y divide-border/60" role="listbox" aria-label="Ranked markets">
         {filtered.map((m) => {
-          const isSelected = m.city === selectedCity;
-          const isHovered = m.city === hoveredCity;
+          const isSelected = m.country === selectedCountry;
+          const isHovered = m.country === hoveredCountry;
           const noData = m.status === "no_data" || m.score == null;
 
           return (
-            <li key={m.city} className="grid grid-cols-[1fr_28px] items-center gap-1">
+            <li key={m.country} className="grid grid-cols-[1fr_28px] items-center gap-1">
               <button
                 role="option"
                 aria-selected={isSelected}
-                onMouseEnter={() => onHover?.(m.city)}
+                onMouseEnter={() => onHover?.(m.country)}
                 onMouseLeave={() => onHover?.(null)}
-                onFocus={() => onHover?.(m.city)}
+                onFocus={() => onHover?.(m.country)}
                 onBlur={() => onHover?.(null)}
-                onClick={() => onSelect(m.city)}
+                onClick={() => onSelect(m.country)}
                 className={`grid grid-cols-[24px_minmax(0,1fr)_80px_56px] items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
                   isSelected
                     ? "bg-raised border-l-2 border-accent"
@@ -54,7 +54,7 @@ export default function MarketList({ markets = [], selectedCity, hoveredCity, on
               >
                 <span className="num text-xs text-muted">{m.rank + 1}</span>
                 <div className="min-w-0 truncate">
-                  <span className={noData ? "text-muted" : "text-text"}>{m.city}</span>
+                  <span className={noData ? "text-muted" : "text-text"}>{m.country}</span>
                   {m.country && (
                     <span className="ml-1 text-[11px] text-muted/60 truncate">({m.country})</span>
                   )}
@@ -70,8 +70,8 @@ export default function MarketList({ markets = [], selectedCity, hoveredCity, on
               </button>
               <AskButton
                 className="flex h-7 w-7 items-center justify-center rounded border border-border text-[10px] text-muted hover:border-accent hover:text-text"
-                context={{ type: "market", id: m.city, label: m.city }}
-                question={noData ? `Why is there no data for ${m.city}?` : `Why is ${m.city} ranked #${m.rank + 1}?`}
+                context={{ type: "market", id: m.country, label: m.country }}
+                question={noData ? `Why is there no data for ${m.country}?` : `Why is ${m.country} ranked #${m.rank + 1}?`}
               />
             </li>
           );

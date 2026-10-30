@@ -90,11 +90,6 @@ def health():
     return {"ok": True, "qloo": config.qloo_ready(), "llm": config.llm_ready(), "mode": config.QLOO_MODE}
 
 
-@app.get("/api/cities")
-def get_cities():
-    return cities_mod.load_cities()
-
-
 @app.get("/api/countries")
 def get_countries():
     return cities_mod.load_countries()
@@ -272,20 +267,20 @@ def sample(filename: str):
     return FileResponse(p)
 
 
-@app.get("/api/city-score")
-async def city_score(request: Request, artist_id: str = "", city: str = ""):
+@app.get("/api/country-score")
+async def country_score(request: Request, artist_id: str = "", country: str = ""):
     if _rate_limited(_client_ip(request)):
         raise HTTPException(429, "rate limit exceeded")
-    if not artist_id.strip() or not city.strip():
-        raise HTTPException(400, "artist_id and city are required")
-    hm = await asyncio.to_thread(qloo.heatmap, artist_id.strip(), city.strip())
+    if not artist_id.strip() or not country.strip():
+        raise HTTPException(400, "artist_id and country are required")
+    hm = await asyncio.to_thread(qloo.heatmap, artist_id.strip(), country.strip())
     if hm["ok"] and hm["aggregate"]:
         agg = hm["aggregate"]
         score = round(agg["mean_affinity_rank"] * 100, 1)
         reason = "Fans of this artist over-index here relative to the average audience."
-        return {"city": city, "score": score, "reason": reason, "status": "scored"}
-    reason = f"No geographic affinity data for {city}." + (f" ({hm['error']})" if hm.get("error") else "")
-    return {"city": city, "score": None, "reason": reason, "status": "no_data"}
+        return {"country": country, "score": score, "reason": reason, "status": "scored"}
+    reason = f"No geographic affinity data for {country}." + (f" ({hm['error']})" if hm.get("error") else "")
+    return {"country": country, "score": None, "reason": reason, "status": "no_data"}
 
 
 # Static frontend (built by `npm run build`). Served at the end so /api wins.

@@ -5,32 +5,32 @@ import {
   formatKey,
   formatTime,
   generateReleaseStrategyMarkdown,
-  getCityRegion,
+  getRegion,
   interpolateColor,
-  joinMarketsToCities,
+  joinMarketsToCountries,
   rankMarkets,
   sanitizeLandFeatures,
   scoreToColor,
 } from "../globeUtils";
 
-const CITIES = [
-  { city: "Lagos", country: "Nigeria", lat: 6.5, lng: 3.3 },
-  { city: "London", country: "United Kingdom", lat: 51.5, lng: -0.1 },
+const COUNTRIES = [
+  { country: "Nigeria", lat: 6.5, lng: 3.3 },
+  { country: "United Kingdom", lat: 51.5, lng: -0.1 },
 ];
 
-describe("joinMarketsToCities", () => {
-  it("joins known cities with lat/lng/country", () => {
-    const out = joinMarketsToCities(
-      [{ city: "Lagos", score: 90 }, { city: "London", score: 80 }],
-      CITIES
+describe("joinMarketsToCountries", () => {
+  it("joins known countries with lat/lng", () => {
+    const out = joinMarketsToCountries(
+      [{ country: "Nigeria", score: 90 }, { country: "United Kingdom", score: 80 }],
+      COUNTRIES
     );
     expect(out).toHaveLength(2);
-    expect(out[0]).toMatchObject({ city: "Lagos", lat: 6.5, lng: 3.3, country: "Nigeria" });
+    expect(out[0]).toMatchObject({ country: "Nigeria", lat: 6.5, lng: 3.3 });
   });
 
-  it("warns and skips unknown cities", () => {
+  it("warns and skips unknown countries", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const out = joinMarketsToCities([{ city: "Atlantis", score: 10 }], CITIES);
+    const out = joinMarketsToCountries([{ country: "Atlantis", score: 10 }], COUNTRIES);
     expect(out).toHaveLength(0);
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
@@ -58,12 +58,12 @@ describe("interpolateColor", () => {
 describe("rankMarkets", () => {
   it("orders scored desc then no_data last, assigning rank", () => {
     const markets = [
-      { city: "X", score: null, status: "no_data" },
-      { city: "A", score: 90, status: "scored" },
-      { city: "B", score: 70, status: "scored" },
+      { country: "X", score: null, status: "no_data" },
+      { country: "A", score: 90, status: "scored" },
+      { country: "B", score: 70, status: "scored" },
     ];
     const r = rankMarkets(markets);
-    expect(r.map((m) => m.city)).toEqual(["A", "B", "X"]);
+    expect(r.map((m) => m.country)).toEqual(["A", "B", "X"]);
     expect(r[0].rank).toBe(0);
     expect(r[2].rank).toBe(2);
   });
@@ -71,8 +71,8 @@ describe("rankMarkets", () => {
 
 describe("hasVenueCoordinates", () => {
   it("detects any venue and empty venues", () => {
-    expect(hasVenueCoordinates([{ city: "A", venues: [] }, { city: "B", venues: [{ name: "x" }] }])).toBe(true);
-    expect(hasVenueCoordinates([{ city: "A", venues: [] }])).toBe(false);
+    expect(hasVenueCoordinates([{ country: "A", venues: [] }, { country: "B", venues: [{ name: "x" }] }])).toBe(true);
+    expect(hasVenueCoordinates([{ country: "A", venues: [] }])).toBe(false);
   });
 });
 
@@ -138,12 +138,12 @@ describe("formatTime & formatKey", () => {
   });
 });
 
-describe("getCityRegion", () => {
+describe("getRegion", () => {
   it("maps countries to global regions", () => {
-    expect(getCityRegion("Nigeria")).toBe("Africa");
-    expect(getCityRegion("United Kingdom")).toBe("Europe");
-    expect(getCityRegion("United States")).toBe("North America");
-    expect(getCityRegion("UnknownLand")).toBe("Other");
+    expect(getRegion("Nigeria")).toBe("Africa");
+    expect(getRegion("United Kingdom")).toBe("Europe");
+    expect(getRegion("United States")).toBe("North America");
+    expect(getRegion("UnknownLand")).toBe("Other");
   });
 });
 
@@ -156,7 +156,7 @@ describe("generateReleaseStrategyMarkdown", () => {
       breakdown: { catalog_match: 90, audience_match: 85 },
       clip_strength: 92,
       audio_features: { tempo: 104, key: "F", mode: "minor", loudness_lufs: -14.2 },
-      markets: [{ city: "Lagos", score: 95, status: "scored" }],
+      markets: [{ country: "Lagos", score: 95, status: "scored" }],
       clips: [{ start: 30, end: 50, caption: "Catchy hook" }],
       blurb: "High energy Afro-soul release.",
       collaborators: [{ name: "Wizkid", why: "Strong audience overlap" }],

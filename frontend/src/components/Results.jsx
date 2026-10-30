@@ -13,64 +13,64 @@ import {
   formatTime,
   generateReleaseStrategyMarkdown,
   hasVenueCoordinates,
-  joinMarketsToCities,
+  joinMarketsToCountries,
   rankMarkets,
   scoreToColor,
 } from "../lib/globeUtils";
 
-export default function Results({ result, events = [], cities = [], error, onReset, onEdit }) {
-  const [selectedCity, setSelectedCity] = useState(null);
-  const [hoveredCity, setHoveredCity] = useState(null);
+export default function Results({ result, events = [], countries = [], error, onReset, onEdit }) {
+  const [selectedCountry, setSelectedCountry] = useState(null);
+  const [hoveredCountry, setHoveredCountry] = useState(null);
   const [toggles, setToggles] = useState({ markets: true, arcs: true, venues: true });
   const [copiedReport, setCopiedReport] = useState(false);
   const [showBaseline, setShowBaseline] = useState(false);
   const [baseline, setBaseline] = useState(null);
   const [askRequest, setAskRequest] = useState(null);
-  const [pendingCities, setPendingCities] = useState(new Set());
+  const [pendingCountries, setPendingCountries] = useState(new Set());
   const [extraScores, setExtraScores] = useState({});
   const globeRef = useRef(null);
 
   const askAbout = useCallback((context, question) => setAskRequest({ context, question }), []);
 
   const joinedMarkets = useMemo(
-    () => joinMarketsToCities(result?.markets || [], cities),
-    [result?.markets, cities]
+    () => joinMarketsToCountries(result?.markets || [], countries),
+    [result?.markets, countries]
   );
   const enrichedMarkets = useMemo(() => {
     if (!Object.keys(extraScores).length) return joinedMarkets;
     return joinedMarkets.map((m) =>
-      extraScores[m.city] ? { ...m, ...extraScores[m.city] } : m
+      extraScores[m.country] ? { ...m, ...extraScores[m.country] } : m
     );
   }, [joinedMarkets, extraScores]);
   const ranked = useMemo(() => rankMarkets(enrichedMarkets), [enrichedMarkets]);
   const venuesAvailable = hasVenueCoordinates(enrichedMarkets);
-  const selected = ranked.find((m) => m.city === selectedCity) || null;
+  const selected = ranked.find((m) => m.country === selectedCountry) || null;
 
-  function handleSelect(city) {
-    setSelectedCity((prev) => (prev === city ? null : city));
-    // Fly to city — use ranked (scored) entry first, fall back to raw cities list for gray dots
-    const m = ranked.find((x) => x.city === city) || cities.find((x) => x.city === city);
-    if (m) globeRef.current?.flyToCity(m);
+  function handleSelect(country) {
+    setSelectedCountry((prev) => (prev === country ? null : country));
+    // Fly to country — use ranked (scored) entry first, fall back to raw countries list for gray dots
+    const m = ranked.find((x) => x.country === country) || countries.find((x) => x.country === country);
+    if (m) globeRef.current?.flyToCountry(m);
 
-    // Lazy-fetch score for no-data or unknown cities
-    const rankedEntry = ranked.find((x) => x.city === city);
+    // Lazy-fetch score for no-data or unknown countries
+    const rankedEntry = ranked.find((x) => x.country === country);
     const alreadyScored = rankedEntry && rankedEntry.score != null;
-    const alreadyFetched = extraScores[city] !== undefined;
-    const isPending = pendingCities.has(city);
+    const alreadyFetched = extraScores[country] !== undefined;
+    const isPending = pendingCountries.has(country);
     if (!alreadyScored && !alreadyFetched && !isPending) {
       const artistId = result?.audience_profile?.entities?.[0]?.id;
       if (!artistId) return;
-      setPendingCities((prev) => new Set([...prev, city]));
-      fetch(`/api/city-score?artist_id=${encodeURIComponent(artistId)}&city=${encodeURIComponent(city)}`)
+      setPendingCountries((prev) => new Set([...prev, country]));
+      fetch(`/api/country-score?artist_id=${encodeURIComponent(artistId)}&country=${encodeURIComponent(country)}`)
         .then((r) => r.json())
         .then((data) => {
-          setExtraScores((prev) => ({ ...prev, [city]: data }));
+          setExtraScores((prev) => ({ ...prev, [country]: data }));
         })
         .catch(() => {
-          setExtraScores((prev) => ({ ...prev, [city]: { city, score: null, reason: "Fetch failed.", status: "no_data" } }));
+          setExtraScores((prev) => ({ ...prev, [country]: { country, score: null, reason: "Fetch failed.", status: "no_data" } }));
         })
         .finally(() => {
-          setPendingCities((prev) => { const s = new Set(prev); s.delete(city); return s; });
+          setPendingCountries((prev) => { const s = new Set(prev); s.delete(country); return s; });
         });
     }
   }
@@ -130,7 +130,7 @@ export default function Results({ result, events = [], cities = [], error, onRes
       const r = await fetch("/api/baseline", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ artist: result.artist, song_id: result.song, cities: (result.markets || []).map((m) => m.city) }),
+        body: JSON.stringify({ artist: result.artist, song_id: result.song, countries: (result.markets || []).map((m) => m.country) }),
       });
       if (r.ok) setBaseline(await r.json());
     } catch {}
@@ -203,7 +203,7 @@ export default function Results({ result, events = [], cities = [], error, onRes
 
       {coverageGap && (
         <div className="rounded-lg border border-warning-subtle bg-warning-subtle/30 p-4 text-sm text-text-secondary leading-relaxed">
-          Data coverage note: Qloo returned limited signals for certain tags or cities.
+          Data coverage note: Qloo returned limited signals for certain tags or countries.
           Missing components were renormalized out of the fit score and flagged below — nothing is fabricated.
         </div>
       )}
@@ -249,7 +249,7 @@ export default function Results({ result, events = [], cities = [], error, onRes
                 Save image
               </button>
               <button
-                onClick={() => { globeRef.current?.resetView(); setSelectedCity(null); }}
+                onClick={() => { globeRef.current?.resetView(); setSelectedCountry(null); }}
                 className="rounded border border-border px-2 py-0.5 hover:text-text"
               >
                 Reset view
@@ -263,14 +263,14 @@ export default function Results({ result, events = [], cities = [], error, onRes
                 ref={globeRef}
                 markets={enrichedMarkets}
                 origin={result.origin}
-                selectedCity={selectedCity}
-                hoveredCity={hoveredCity}
+                selectedCountry={selectedCountry}
+                hoveredCountry={hoveredCountry}
                 onSelect={handleSelect}
-                onHover={setHoveredCity}
+                onHover={setHoveredCountry}
                 showMarkets={toggles.markets}
                 showArcs={toggles.arcs}
                 showVenues={toggles.venues}
-                allCities={cities}
+                allCountries={countries}
                 height={480}
               />
             </div>
@@ -278,10 +278,10 @@ export default function Results({ result, events = [], cities = [], error, onRes
             <div className="max-h-[440px] overflow-hidden rounded-md border border-border">
               <MarketList
                 markets={enrichedMarkets}
-                selectedCity={selectedCity}
-                hoveredCity={hoveredCity}
+                selectedCountry={selectedCountry}
+                hoveredCountry={hoveredCountry}
                 onSelect={handleSelect}
-                onHover={setHoveredCity}
+                onHover={setHoveredCountry}
               />
             </div>
           </div>
@@ -292,8 +292,8 @@ export default function Results({ result, events = [], cities = [], error, onRes
             <MarketDetail
               market={selected}
               collaborators={result.collaborators || []}
-              isPending={pendingCities.has(selectedCity)}
-              onClose={() => setSelectedCity(null)}
+              isPending={pendingCountries.has(selectedCountry)}
+              onClose={() => setSelectedCountry(null)}
             />
           )}
         </section>
@@ -489,7 +489,7 @@ function VerdictBanner({ result, ranked, onEdit }) {
       artist: result.artist,
       song_id: result.song,
       song_name: result.song_name,
-      countries: (result.markets || []).map((m) => m.city),
+      countries: (result.markets || []).map((m) => m.country),
       focus: limiting?.key === "catalog" ? "sounds_like" : null,
     });
   }
@@ -497,7 +497,7 @@ function VerdictBanner({ result, ranked, onEdit }) {
   return (
     <div className="mb-5 rounded-xl border border-border bg-panel p-4 text-body text-secondary">
       <div className="flex flex-wrap gap-x-2 gap-y-1">
-        {best && <span>Best market: <span className="font-medium text-text">{best.city}</span> <span className="num text-text">({best.score})</span>.</span>}
+        {best && <span>Best market: <span className="font-medium text-text">{best.country}</span> <span className="num text-text">({best.score})</span>.</span>}
         {fit != null && <span>Fit <span className="num text-text">{fit}/100</span>, {band}.</span>}
         {clip && <span>Post the <span className="num text-text">{formatTime(clip.start)} to {formatTime(clip.end)}</span> hook first.</span>}
       </div>
@@ -524,7 +524,7 @@ function BaselineModal({ result, baseline, onClose }) {
             <h3 className="text-small font-semibold text-text">Landfall (agent + Qloo)</h3>
             <p className="num text-2xl text-text">{result.fit_score ?? "—"}<span className="ml-1 text-small text-muted">/100</span></p>
             <p className="mt-2 text-small text-muted">
-              Markets: {(result.markets || []).filter((m) => m.score != null).slice(0, 3).map((m) => `${m.city} ${m.score}`).join(", ") || "—"}
+              Markets: {(result.markets || []).filter((m) => m.score != null).slice(0, 3).map((m) => `${m.country} ${m.score}`).join(", ") || "—"}
             </p>
             <p className="mt-2 text-small text-muted">
               Collaborators: {(result.collaborators || []).slice(0, 4).map((c) => c.name).join(", ") || "—"}
@@ -538,7 +538,7 @@ function BaselineModal({ result, baseline, onClose }) {
               <>
                 <p className="num text-2xl text-text">{baseline.fit_score ?? "—"}<span className="ml-1 text-small text-muted">/100</span></p>
                 <p className="mt-2 text-small text-muted">
-                  Markets: {(baseline.markets || []).slice(0, 3).map((m) => `${m.city} ${m.score}`).join(", ") || "—"}
+                  Markets: {(baseline.markets || []).slice(0, 3).map((m) => `${m.country} ${m.score}`).join(", ") || "—"}
                 </p>
                 <p className="mt-2 text-small text-muted">
                   Collaborators: {(baseline.collaborators || []).slice(0, 4).map((c) => c.name).join(", ") || "—"}
@@ -667,7 +667,7 @@ function MarketDetail({ market, collaborators, isPending, onClose }) {
     <div className="mt-3 rounded-md border border-border bg-raised p-4 text-xs space-y-2">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-text">
-          {market.city}
+          {market.country}
           {market.country && <span className="ml-1 text-muted text-xs">({market.country})</span>}
           {isPending && noData
             ? <span className="num ml-2 text-muted animate-pulse">fetching…</span>
@@ -676,7 +676,7 @@ function MarketDetail({ market, collaborators, isPending, onClose }) {
         </h3>
         <div className="flex items-center gap-2">
           <button onClick={onClose} className="text-muted hover:text-text">close</button>
-          <AskButton context={{ type: "market", id: market.city, label: market.city }} question={`Why is ${market.city} ranked where it is?`} />
+          <AskButton context={{ type: "market", id: market.country, label: market.country }} question={`Why is ${market.country} ranked where it is?`} />
         </div>
       </div>
 

@@ -22,7 +22,7 @@ export default function GlobeFallback({ markets = [], origin = null }) {
             const [x2, y2] = project(m.lat, m.lng);
             return (
               <line
-                key={m.city}
+                key={m.country}
                 x1={originXY[0]} y1={originXY[1]} x2={x2} y2={y2}
                 stroke={scoreToColor(m.score)} strokeWidth={1} strokeOpacity={0.6} strokeDasharray="4 3"
               />
@@ -33,11 +33,11 @@ export default function GlobeFallback({ markets = [], origin = null }) {
           const isNoData = m.status === "no_data" || m.score == null;
           if (isNoData) {
             return (
-              <circle key={m.city} cx={x} cy={y} r={4} fill="none" stroke={COLORS.noData} strokeWidth={1.5} />
+              <circle key={m.country} cx={x} cy={y} r={4} fill="none" stroke={COLORS.noData} strokeWidth={1.5} />
             );
           }
           return (
-            <circle key={m.city} cx={x} cy={y} r={4 + (m.score ?? 0) / 100 * 7} fill={scoreToColor(m.score, m.rank)} />
+            <circle key={m.country} cx={x} cy={y} r={4 + (m.score ?? 0) / 100 * 7} fill={scoreToColor(m.score, m.rank)} />
           );
         })}
         {originXY && (

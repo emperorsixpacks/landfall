@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import GlobeContainer from "./GlobeContainer.jsx";
-import { joinMarketsToCities } from "../lib/globeUtils";
+import { joinMarketsToCountries } from "../lib/globeUtils";
 import { useReducedMotion } from "../hooks/useMotion";
 
 const STAGES = ["IDENTIFY", "PROFILE", "LISTEN", "BRIDGE", "TARGET", "CLIP", "SCORE"];
@@ -15,8 +15,8 @@ function isDuplicate(e) {
   return (e.source === "fallback" || e.status === "fallback") && /duplicate/i.test(e.result_summary || "");
 }
 
-export default function RunTimeline({ events = [], cities = [], liveMarkets = [], onCancel }) {
-  const joined = useMemo(() => joinMarketsToCities(liveMarkets, cities), [liveMarkets, cities]);
+export default function RunTimeline({ events = [], countries = [], liveMarkets = [], onCancel }) {
+  const joined = useMemo(() => joinMarketsToCountries(liveMarkets, countries), [liveMarkets, countries]);
   const reduced = useReducedMotion();
 
   const [elapsed, setElapsed] = useState(0);
@@ -144,7 +144,7 @@ function Row({ e, index, reduced }) {
 
         {market && (
           <div className="flex items-center gap-2">
-            <span className="text-muted">{market.city}</span>
+            <span className="text-muted">{market.country}</span>
             <div className="h-1.5 w-40 overflow-hidden rounded-full bg-raised">
               <div
                 className={`h-full rounded-full ${scoreColor(market.score)}`}

@@ -70,8 +70,8 @@ export default function App() {
           if (ev.data.market_scored) {
             const ms = ev.data.market_scored;
             setLiveMarkets((prev) => {
-              const rest = prev.filter((m) => m.city !== ms.city);
-              return [...rest, { city: ms.city, score: ms.score, status: ms.score == null ? "no_data" : "scored", reason: "", venues: [] }];
+              const rest = prev.filter((m) => m.country !== ms.country);
+              return [...rest, { country: ms.country, score: ms.score, status: ms.score == null ? "no_data" : "scored", reason: "", venues: [] }];
             });
           }
         } else if (ev.event === "final") {
@@ -179,13 +179,13 @@ export default function App() {
           <Home config={config} allCountries={countries} onRun={run} onError={setError} prefill={prefill} />
         )}
         {view === "running" && (
-          <RunTimeline events={events} cities={countries} liveMarkets={liveMarkets} onCancel={cancelRun} />
+          <RunTimeline events={events} countries={countries} liveMarkets={liveMarkets} onCancel={cancelRun} />
         )}
         {view === "results" && (
           <Results
             result={result}
             events={events}
-            cities={countries}
+            countries={countries}
             error={error}
             onReset={() => { setPrefill(null); setView("home"); }}
             onEdit={(prefill) => { setPrefill(prefill); setView("home"); }}
@@ -248,7 +248,7 @@ export default function App() {
               <div>
                 <span className="font-semibold text-text block mb-0.5">4. Target & Score</span>
                 <p className="leading-relaxed">
-                  Queries Qloo geographic heatmaps across candidate cities, cuts 15–30s hook clips, and calculates fit in pure code.
+                  Queries Qloo geographic heatmaps across candidate countries, cuts 15–30s hook clips, and calculates fit in pure code.
                 </p>
               </div>
             </div>

@@ -14,7 +14,7 @@ def run_baseline(request: dict) -> dict:
     artist = (request.get("artist") or "").strip() or "the artist"
     song_id = request.get("song_id")
     genre = request.get("genre")
-    cities = request.get("cities") or []
+    countries = request.get("countries") or []
 
     qloo_tags: list[str] = []
     related: list[str] = []
@@ -33,9 +33,9 @@ def run_baseline(request: dict) -> dict:
 
     prompt = (
         "You are a release planner with access to Qloo taste data. Write a release plan "
-        "based only on the data provided; do not invent artists, cities, or numbers outside it. "
-        f"Data: {json.dumps({'artist': artist, 'genre': genre, 'qloo_taste_tags': qloo_tags, 'related_artists': related, 'candidate_markets': cities}, default=str)}. "
-        'Reply JSON only: {"fit_estimate": <int 0-100>, "markets": [{"city": "...", "score": <int>, "reason": "..."}], '
+        "based only on the data provided; do not invent artists, countries, or numbers outside it. "
+        f"Data: {json.dumps({'artist': artist, 'genre': genre, 'qloo_taste_tags': qloo_tags, 'related_artists': related, 'candidate_markets': countries}, default=str)}. "
+        'Reply JSON only: {"fit_estimate": <int 0-100>, "markets": [{"country": "...", "score": <int>, "reason": "..."}], '
         '"collaborators": [{"name": "...", "why": "..."}], "blurb": "...", "caveat": "..."}. '
         "Ground every market score and collaborator in the provided tags or related artists."
     )

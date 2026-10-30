@@ -24,7 +24,7 @@ class GlobeErrorBoundary extends Component {
 
 // Lazy-loads the WebGL globe so the home page stays fast; falls back to an SVG
 // dot-map when WebGL is unavailable or the renderer throws. Forwards the ref so
-// callers can flyToCity / resetView / saveImage / startTour.
+// callers can flyToCountry / resetView / saveImage / startTour.
 const GlobeContainer = forwardRef(function GlobeContainer(props, ref) {
   const [webgl] = useState(() => webglAvailable());
   if (!webgl) return <GlobeFallback {...props} />;
