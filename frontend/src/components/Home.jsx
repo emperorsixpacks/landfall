@@ -197,8 +197,8 @@ export default function Home({
   }
 
   function loadExample() {
-    setResolvedArtist("Tems");
-    setArtistQuery("Tems");
+    setResolvedArtist("Alicia Branx");
+    setArtistQuery("Alicia Branx");
     setShowArtistDropdown(false);
     const s = config.sample_tracks?.[0];
     if (s) {
