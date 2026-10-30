@@ -36,11 +36,12 @@ SYSTEM_PROMPT = (
     "available. When asked about a specific market or country, call explain_market "
     "with that country name rather than relying on the whole market list. "
     "Write like a knowledgeable music-industry analyst talking to the artist, in "
-    "plain conversational English. Translate jargon (\"over-index\", \"affinity rank\", "
-    "\"sampled locations\") into plain language. Always use the Wikipedia context "
-    "(population, region, culture) to explain why a market ranks where it does, and "
-    "weave the Qloo numbers in rather than listing them. 1 to 3 short paragraphs, "
-    "no em dashes. Offer at most one follow-up."
+    "plain conversational English. Answer the WHY, not just the numbers: explain "
+    "the cause and effect (for example, a huge population dilutes how concentrated "
+    "the fans are), drawing on the affinity and the Wikipedia context (population, "
+    "region, culture). Translate jargon (\"over-index\", \"affinity rank\") into plain "
+    "language and never list bare figures. 1 to 3 short paragraphs, no em dashes. "
+    "Offer at most one follow-up."
 )
 
 TOOL_LABELS = {
@@ -227,30 +228,32 @@ def _explain_market(args, ctx):
     med = _median_scores(ctx)
     delta = round(m["score"] - med, 1) if med is not None else None
     top = scored[0] if scored else None
-
-    facts = []
-    if m.get("points") is not None:
-        facts.append(f"{m['points']} sampled locations")
-    if m.get("affinity") is not None:
-        facts.append(f"mean affinity {m['affinity']:.2f}")
-    if m.get("popularity") is not None:
-        facts.append(f"mean popularity {m['popularity']:.2f}")
-    qstr = ("Qloo: " + ", ".join(facts) + ". ") if facts else ""
+    aff = m.get("affinity")
+    pop = m.get("popularity")
 
     wik = wiki.fetch_country_info(m["country"])
-    wstr = ""
-    if wik and wik.get("summary"):
-        wstr = f"Context: {wik['summary']} "
+    wik_sum = (wik or {}).get("summary", "")
 
-    text = (
-        f"{m['country']} ranks #{rank} of {total} with a score of {m['score']}. "
-        + (f"It is {delta:+} vs the median of {med}. " if delta is not None else "")
-        + (f"Top market is {top['country']} at {top['score']}. " if top and top['country'] != m['country'] else "")
-        + qstr + wstr
-        + f"{m.get('reason') or ''}"
-    )
+    # Narrative "why", not a number dump.
+    sentences = [f"{m['country']} ranks #{rank} of {total}."]
+    if delta is not None:
+        d = "above" if delta >= 0 else "below"
+        sentences.append(f"Its score of {m['score']} sits {abs(delta)} points {d} the median of {med}.")
+    if aff is not None:
+        if aff >= 0.6:
+            why = "the artist's fans are strongly concentrated here"
+        elif aff >= 0.4:
+            why = "the artist's fans are only moderately concentrated here"
+        else:
+            why = "the artist's fans are thinly spread here"
+        extra = f", popularity {pop:.2f}" if pop is not None else ""
+        sentences.append(f"The reason is that {why} (affinity {aff:.2f}{extra}).")
+    if top and top["country"] != m["country"]:
+        sentences.append(f"For comparison, the top market {top['country']} scores {top['score']}.")
+    if wik_sum:
+        sentences.append(wik_sum)
     ref = next((f"step:{s.get('step')}" for s in (ctx["result"].get("trace") or []) if s.get("tool") == "score_market" and (s.get("args_summary") or "").lower() == m["country"].lower()), f"section:markets")
-    return text, [{"kind": "qloo", "label": m["country"], "ref": ref}]
+    return " ".join(sentences), [{"kind": "qloo", "label": m["country"], "ref": ref}]
 
 
 def _compare_markets(args, ctx):
@@ -603,8 +606,9 @@ async def run_chat(request: dict):
             yield {"type": "token", "text": tok}
 
     if not emitted:
-        # Stream failed or the LLM is not configured: fall back to deterministic,
-        # grounded tool answers so the demo still answers honestly.
+        # Stream failed or the LLM is not configured: fall back to the grounded,
+        # narrative tool answers (stripped of their "tool: " prefixes) so the demo
+        # still answers in prose rather than dumping raw fields.
         fallback_parts = []
         if not tool_results:
             s, ev = _explain_score({}, ctx)
@@ -616,7 +620,8 @@ async def run_chat(request: dict):
                 fallback_parts.append(s2)
                 evidence.extend(ev2)
         else:
-            fallback_parts = tool_results
+            for t in tool_results:
+                fallback_parts.append(t.split(": ", 1)[1] if ": " in t else t)
         yield {"type": "token", "text": " ".join(fallback_parts)}
 
     yield {"type": "done", "evidence": evidence}
