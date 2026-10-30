@@ -30,3 +30,6 @@ samples/*.m4a
 
 # Editor formatter temp files
 .null-ls_*
+
+# Stray session transcript dump (not part of the app)
+kiro.jon

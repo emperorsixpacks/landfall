@@ -8,10 +8,16 @@ from functools import lru_cache
 from . import config
 
 CITIES_FILE = config.ROOT / "data" / "cities.json"
+COUNTRIES_FILE = config.ROOT / "data" / "countries.json"
 
 DEFAULT_MARKETS = [
     "Lagos", "London", "Accra", "New York",
     "Abuja", "Los Angeles", "Paris", "Johannesburg",
+]
+
+DEFAULT_COUNTRIES = [
+    "Nigeria", "United Kingdom", "United States", "Ghana",
+    "South Africa", "France", "Japan", "Brazil",
 ]
 
 
@@ -24,8 +30,42 @@ def load_cities() -> list[dict]:
 
 
 @lru_cache(maxsize=1)
+def load_countries() -> list[dict]:
+    try:
+        return json.loads(COUNTRIES_FILE.read_text())
+    except (OSError, json.JSONDecodeError):
+        return []
+
+
+@lru_cache(maxsize=1)
 def city_names() -> frozenset:
     return frozenset(c["city"] for c in load_cities())
+
+
+@lru_cache(maxsize=1)
+def country_names() -> frozenset:
+    return frozenset(c["city"] for c in load_countries())
+
+
+def country_entry(name: str) -> dict | None:
+    if not name:
+        return None
+    for c in load_countries():
+        if c["city"].lower() == name.lower():
+            return c
+    return None
+
+
+def normalize_country_selection(countries: list[str]) -> list[str]:
+    """Filter user-selected countries to known ones, preserving order."""
+    known = country_names()
+    seen = set()
+    out = []
+    for c in countries:
+        if c in known and c not in seen:
+            out.append(c)
+            seen.add(c)
+    return out or list(DEFAULT_COUNTRIES)
 
 
 def latlng(city: str) -> tuple[float, float] | None:

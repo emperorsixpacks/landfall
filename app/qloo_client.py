@@ -290,15 +290,16 @@ def _coords(raw: dict):
     return lat, lng
 
 
-def heatmap(entity_id: str, city: str) -> dict:
+def heatmap(entity_id: str, city: str, tags: list[str] | None = None) -> dict:
     """Geographic affinity of an entity within a city (urn:heatmap, documented in
-    the matrix with signal.interests.entities + filter.location.query)."""
+    the matrix with signal.interests.entities + filter.location.query). Optional
+    tags bias the signal toward the song's taste profile (lyrics/audio)."""
     if config.QLOO_MODE == "mock":
         return mock_data.heatmap(entity_id, city)
-    out = insights(
-        "urn:heatmap",
-        **{"filter.location.query": city, "signal.interests.entities": entity_id},
-    )
+    params: dict[str, Any] = {"filter.location.query": city, "signal.interests.entities": entity_id}
+    if tags:
+        params["signal.interests.tags"] = ",".join(tags)
+    out = insights("urn:heatmap", **params)
     points = out["results"].get("heatmap") or []
     qs = [p.get("query") or {} for p in points]
     ranks = [q.get("affinity_rank") for q in qs if q.get("affinity_rank") is not None]

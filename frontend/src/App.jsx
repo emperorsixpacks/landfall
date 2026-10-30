@@ -6,17 +6,18 @@ import Results from "./components/Results.jsx";
 export default function App() {
   const [view, setView] = useState("home");
   const [config, setConfig] = useState({ sample_artists: [], sample_tracks: [], youtube_audience_enabled: false });
-  const [cities, setCities] = useState([]);
+  const [countries, setCountries] = useState([]);
   const [events, setEvents] = useState([]);
   const [liveMarkets, setLiveMarkets] = useState([]);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
+  const [prefill, setPrefill] = useState(null);
   const abortRef = useRef(null);
 
   useEffect(() => {
     fetch("/api/config").then((r) => r.json()).then(setConfig).catch(() => {});
-    fetch("/api/cities").then((r) => r.json()).then(setCities).catch(() => {});
+    fetch("/api/countries").then((r) => r.json()).then(setCountries).catch(() => {});
   }, []);
 
   async function run(body) {
@@ -38,6 +39,17 @@ export default function App() {
         signal: controller.signal,
       });
 
+      if (!res.ok) {
+        let msg = "";
+        try {
+          const text = await res.text();
+          try { msg = JSON.parse(text).detail || text; } catch { msg = text; }
+        } catch {}
+        setError(msg || `Request failed (${res.status})`);
+        setView("home");
+        return;
+      }
+
       if (!res.body) {
         setError("No response stream");
         setView("home");
@@ -47,6 +59,29 @@ export default function App() {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let gotFinal = false;
+      let gotError = false;
+
+      function handlePart(part) {
+        const ev = parseSSE(part);
+        if (!ev) return;
+        if (ev.event === "event") {
+          setEvents((prev) => [...prev, ev.data]);
+          if (ev.data.market_scored) {
+            const ms = ev.data.market_scored;
+            setLiveMarkets((prev) => {
+              const rest = prev.filter((m) => m.city !== ms.city);
+              return [...rest, { city: ms.city, score: ms.score, status: ms.score == null ? "no_data" : "scored", reason: "", venues: [] }];
+            });
+          }
+        } else if (ev.event === "final") {
+          gotFinal = true;
+          setResult(ev.data);
+        } else if (ev.event === "error") {
+          gotError = true;
+          setError(ev.data.message || "run failed");
+        }
+      }
 
       while (true) {
         const { done, value } = await reader.read();
@@ -54,24 +89,17 @@ export default function App() {
         buffer += decoder.decode(value, { stream: true });
         const parts = buffer.split("\n\n");
         buffer = parts.pop() || "";
-        for (const part of parts) {
-          const ev = parseSSE(part);
-          if (!ev) continue;
-          if (ev.event === "event") {
-            setEvents((prev) => [...prev, ev.data]);
-            if (ev.data.market_scored) {
-              const ms = ev.data.market_scored;
-              setLiveMarkets((prev) => {
-                const rest = prev.filter((m) => m.city !== ms.city);
-                return [...rest, { city: ms.city, score: ms.score, status: ms.score == null ? "no_data" : "scored", reason: "", venues: [] }];
-              });
-            }
-          } else if (ev.event === "final") {
-            setResult(ev.data);
-          } else if (ev.event === "error") {
-            setError(ev.data.message || "run failed");
-          }
-        }
+        for (const part of parts) handlePart(part);
+      }
+
+      // Flush the decoder and any trailing partial event before giving up.
+      buffer += decoder.decode();
+      if (buffer.trim()) {
+        for (const part of buffer.split("\n\n")) handlePart(part);
+      }
+
+      if (!gotFinal && !gotError) {
+        setError("The run ended without a result. Check the server logs.");
       }
     } catch (e) {
       if (controller.signal.aborted) {
@@ -141,21 +169,26 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Content — shared 1040px container, padding 24px */}
-      <main className="mx-auto w-full max-w-[1040px] px-6 py-8 flex-1">
+      {/* Main Content — results is wider (1440px); home/running keep 1040px */}
+      <main
+        className={`mx-auto w-full flex-1 ${
+          view === "results" ? "max-w-[1440px] px-6 py-8 pb-24" : "max-w-[1040px] px-6 py-8"
+        }`}
+      >
         {view === "home" && (
-          <Home config={config} allCities={cities} onRun={run} onError={setError} />
+          <Home config={config} allCountries={countries} onRun={run} onError={setError} prefill={prefill} />
         )}
         {view === "running" && (
-          <RunTimeline events={events} cities={cities} liveMarkets={liveMarkets} onCancel={cancelRun} />
+          <RunTimeline events={events} cities={countries} liveMarkets={liveMarkets} onCancel={cancelRun} />
         )}
         {view === "results" && (
           <Results
             result={result}
             events={events}
-            cities={cities}
+            cities={countries}
             error={error}
-            onReset={() => setView("home")}
+            onReset={() => { setPrefill(null); setView("home"); }}
+            onEdit={(prefill) => { setPrefill(prefill); setView("home"); }}
           />
         )}
       </main>

@@ -38,10 +38,11 @@ def _new_state(request: dict) -> dict:
     return {
         "artist_name": request.get("artist"),
         "song_id": request.get("song_id"),
+        "song_name": request.get("song_name"),
         "genre_tag": request.get("genre"),
         "sounds_like": request.get("sounds_like") or [],
         "genres": request.get("genres") or [],
-        "cities": cities.normalize_selection(request.get("cities") or []),
+        "countries": cities.normalize_country_selection(request.get("countries") or []),
         "catalog": {"top_song_names": [], "related_names": [], "tags": [], "artist_entity": None},
         "audience": {"tags": [], "demographics": None},
         "audio": None,
@@ -323,7 +324,7 @@ async def _finish(state: dict, request: dict):
 
     # LISTEN: analyze audio (deterministic) if a song was provided.
     if state["song_id"] and not state.get("audio"):
-        res = audio.analyze(state["song_id"])
+        res = await asyncio.to_thread(audio.analyze, state["song_id"])
         if res.get("ok"):
             state["audio"] = res
             yield tr("analyze_audio", "LISTEN", {"song_id": state["song_id"]}, f"Audio analyzed: {res['tempo']} BPM, key {res['key']} {res['mode']}.")
@@ -335,7 +336,7 @@ async def _finish(state: dict, request: dict):
     # LYRICS: transcribe + theme tags (best-effort, runs before describe_sound so
     # the descriptors/comparables can reflect what the song is actually about).
     if config.lyrics_ready() and state.get("song_id"):
-        lr = lyrics.analyze_lyrics(state["song_id"])
+        lr = await asyncio.to_thread(lyrics.analyze_lyrics, state["song_id"])
         state["lyrics"] = lr
         if lr.get("ok"):
             yield tr("analyze_lyrics", "LYRICS", {"song_id": state["song_id"]}, f"Lyrics: {len(lr.get('themes', []))} theme(s), {len(lr.get('tags', []))} tag(s) resolved.")
@@ -344,7 +345,7 @@ async def _finish(state: dict, request: dict):
 
     # COMPARE: describe sound + resolve comparables (uses lyrics themes/mood).
     if state.get("audio") and state["audio"].get("ok") and not state.get("sound"):
-        tools._describe_sound({"features": state["audio"]}, state)
+        await asyncio.to_thread(tools._describe_sound, {"features": state["audio"]}, state)
         yield tr("describe_sound", "COMPARE", {}, f"Sound described with {len((state.get('sound') or {}).get('descriptors', []))} descriptor(s).")
 
     # User-picked sounds-like artists take priority over LLM-inferred comparables.
@@ -358,7 +359,7 @@ async def _finish(state: dict, request: dict):
     bridge_tags: list[dict] = []
     bridge_trace: list[dict] = []
     if state.get("audio") and state["audio"].get("ok"):
-        br = bridge.sound_to_tags(state["audio"], mood=(state.get("lyrics") or {}).get("mood"))
+        br = await asyncio.to_thread(bridge.sound_to_tags, state["audio"], (state.get("lyrics") or {}).get("mood"))
         bridge_tags = br.get("tags") or []
         bridge_trace = br.get("bridge_trace") or []
         state["bridge"] = {"tags": bridge_tags, "trace": bridge_trace}
@@ -396,6 +397,8 @@ async def _finish(state: dict, request: dict):
     # TARGET: markets (heatmap, streamed as market_scored) + collaborators.
     state["markets"] = []
     if artist_entity:
+        # Geographic signal = artist + named entities mentioned in the lyrics
+        # (places/people). Theme tags feed the fit score, not the geography.
         signal_ids = _signal_entities(state, artist_entity)
         signal_str = ",".join(signal_ids)
 
@@ -407,7 +410,7 @@ async def _finish(state: dict, request: dict):
             return city, market, latency
 
         scored = await asyncio.gather(
-            *[_score_one(city) for city in state["cities"]],
+            *[_score_one(city) for city in state["countries"]],
             return_exceptions=True,
         )
         for item in scored:
@@ -454,7 +457,7 @@ async def _finish(state: dict, request: dict):
                 "status": "no_data",
                 "venues": [],
             }
-            for c in state["cities"]
+            for c in state["countries"]
         ]
     state["collaborators"] = _collaborators(state, artist_entity)
     if state["collaborators"]:
@@ -465,11 +468,11 @@ async def _finish(state: dict, request: dict):
     if state.get("audio") and state["audio"].get("ok"):
         hooks = state["audio"].get("hooks") or []
         if hooks and not state["clips"]:
-            state["clips"] = (audio.cut_clips(state["song_id"], hooks).get("clips") or [])
+            state["clips"] = ((await asyncio.to_thread(audio.cut_clips, state["song_id"], hooks)).get("clips") or [])
             if state["clips"]:
                 yield tr("cut_clips", "CLIP", {"song_id": state["song_id"]}, f"Cut {len(state['clips'])} hook clip(s).")
         if state["clips"]:
-            tools._write_captions({"clips": state["clips"], "audience_profile": state["audience"]}, state)
+            await asyncio.to_thread(tools._write_captions, {"clips": state["clips"], "audience_profile": state["audience"]}, state)
             yield tr("write_captions", "CLIP", {}, f"Wrote {len(state['clips'])} caption(s).")
 
     # SCORE: fit score (pure code) + blurb (LLM, from evidence only).
@@ -486,7 +489,7 @@ async def _finish(state: dict, request: dict):
             "hooks": (state["audio"] or {}).get("hooks") or [],
         }
     )
-    blurb = _blurb(state, score)
+    blurb = await asyncio.to_thread(_blurb, state, score)
 
     state.setdefault("trace", []).append(
         {
@@ -502,7 +505,7 @@ async def _finish(state: dict, request: dict):
         }
     )
 
-    yield {"type": "final", "result": _assemble(state, request, score, blurb)}
+    yield {"type": "final", "result": _assemble(state, request, score, blurb), "state": state}
 
 
 def _signal_entities(state, artist_entity):
@@ -547,11 +550,26 @@ def _market_from_heatmap(city, hm) -> dict:
     if hm["ok"] and hm["aggregate"]:
         agg = hm["aggregate"]
         score = round(agg["mean_affinity_rank"] * 100, 1)
-        reason = (
-            f"Artist overperforms geographically across {agg['points']} grid points "
-            f"(mean affinity_rank {agg['mean_affinity_rank']:.2f})."
-        )
-        return {"city": city, "score": score, "reason": reason, "status": "scored", "venues": []}
+        aff = agg.get("mean_affinity_rank")
+        if aff is None:
+            reason = "No clear affinity signal."
+        elif aff >= 0.6:
+            reason = "Fans of this artist over-index here strongly."
+        elif aff >= 0.4:
+            reason = "Fans of this artist over-index here moderately."
+        else:
+            reason = "Fans of this artist are less concentrated here."
+        return {
+            "city": city,
+            "score": score,
+            "reason": reason,
+            "status": "scored",
+            "points": agg.get("points"),
+            "affinity_rank": agg.get("mean_affinity_rank"),
+            "affinity": agg.get("mean_affinity"),
+            "popularity": agg.get("mean_popularity"),
+            "venues": [],
+        }
     reason = f"No geographic affinity data for {city}." + (f" ({hm['error']})" if hm.get("error") else "")
     return {"city": city, "score": None, "reason": reason, "status": "no_data", "venues": []}
 
@@ -620,8 +638,9 @@ def _collaborators(state, artist_entity):
         if e.get("type") != "artist":
             continue
         score = e.get("score")
-        why = f"Related artist" + (f" with Qloo affinity {round(score * 100)}." if score is not None else ".")
-        collabs.append({"name": e.get("name"), "id": e.get("id"), "why": why})
+        affinity = round(score * 100) if score is not None else None
+        why = f"Related artist" + (f" with Qloo affinity {affinity}." if affinity is not None else ".")
+        collabs.append({"name": e.get("name"), "id": e.get("id"), "affinity": affinity, "why": why})
     return collabs[:8]
 
 
@@ -666,6 +685,7 @@ def _assemble(state, request, score, blurb):
     return {
         "artist": state.get("artist_name") or request.get("artist"),
         "song": state.get("song_id"),
+        "song_name": state.get("song_name") or request.get("song_name"),
         "data_mode": config.QLOO_MODE,
         "origin": state.get("origin"),
         "qloo_calls": qloo.drain_requests(),
@@ -703,7 +723,7 @@ def _assemble(state, request, score, blurb):
             "spotify_related": state.get("catalog", {}).get("spotify_related", []),
         },
         "markets": state["markets"],
-        "collaborators": [{"name": c["name"], "why": c["why"]} for c in state["collaborators"]],
+        "collaborators": [{"name": c["name"], "affinity": c.get("affinity"), "why": c["why"]} for c in state["collaborators"]],
         "clips": clips,
         "blurb": blurb,
         "descriptors": (state.get("sound") or {}).get("descriptors", []),

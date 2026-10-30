@@ -68,3 +68,33 @@ body {
   from { transform: scale(1); opacity: 0.5; }
   to { transform: scale(6); opacity: 0; }
 }
+
+/* Container queries — cards adapt to their own width, not the viewport. */
+.report-col { container-type: inline-size; }
+.fit-card { container-type: inline-size; }
+.globe-card { container-type: inline-size; }
+
+.top-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: stretch; }
+@container (min-width: 860px) {
+  .top-row { grid-template-columns: 360px minmax(0, 1fr); }
+}
+
+.fit-body { display: flex; flex-direction: column; gap: 16px; }
+@container (min-width: 480px) {
+  .fit-body { flex-direction: row; align-items: center; }
+}
+
+.globe-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+@container (min-width: 760px) {
+  .globe-body { grid-template-columns: minmax(0, 1fr) 320px; }
+}
+
+.metric-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 16px; }
+
+/* Chat dock transitions (opacity + translate only). */
+.dock-pop { transition: opacity 220ms var(--ease-out), transform 220ms var(--ease-out); }
+.dock-chip { transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out); }
+
+@media (prefers-reduced-motion: reduce) {
+  .dock-pop, .dock-chip { transition: none; }
+}

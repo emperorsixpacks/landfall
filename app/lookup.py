@@ -105,14 +105,18 @@ def find_artist(query: str) -> dict:
             "albums": spotify.get("albums", []),
             "genres": spotify.get("genres", []),
             "image": spotify.get("image"),
+            "popularity": spotify.get("popularity"),
             "spotify_top_songs": spotify.get("spotify_top_songs", []),
+            "spotify_related": spotify.get("spotify_related", []),
         }
         source = "Spotify"
     elif artist is not None and spotify:
         artist["albums"] = spotify.get("albums", [])
         artist["genres"] = spotify.get("genres", [])
         artist["image"] = spotify.get("image")
+        artist["popularity"] = spotify.get("popularity")
         artist["spotify_top_songs"] = spotify.get("spotify_top_songs", [])
+        artist["spotify_related"] = spotify.get("spotify_related", [])
         source = "YouTube Music + Spotify"
 
     if artist:

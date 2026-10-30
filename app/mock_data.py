@@ -185,9 +185,15 @@ def affinity_between(signal_entity_id, target_ids) -> dict:
 
 def heatmap(entity_id: str, city: str) -> dict:
     key = _key_by_id(entity_id)
-    base = _CITIES.get(city.lower().strip())
-    if not key or base is None:
-        return {"ok": False, "aggregate": None, "points": 0, "error": "no sample data for this city", "sample_data": True}
+    if not key:
+        return {"ok": False, "aggregate": None, "points": 0, "error": "no sample entity", "sample_data": True}
+    loc = (city or "").lower().strip()
+    base = _CITIES.get(loc)
+    if base is None:
+        # Deterministic synthetic score for any location not in the sample map
+        # (e.g. country names), so mock mode behaves for arbitrary inputs.
+        h = sum(ord(ch) for ch in loc)
+        base = round(0.55 + (h % 40) / 100.0, 2)
     return {
         "ok": True,
         "aggregate": {

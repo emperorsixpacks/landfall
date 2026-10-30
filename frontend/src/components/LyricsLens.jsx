@@ -8,7 +8,7 @@ function fmt(s) {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
-export default function LyricsLens({ lyrics = {}, audioFeatures = {}, songId }) {
+export default function LyricsLens({ lyrics = {}, audioFeatures = {}, songId, panel = false }) {
   const segments = lyrics.segments || [];
   const tags = lyrics.tags || [];
   const themes = lyrics.themes || [];
@@ -90,13 +90,13 @@ export default function LyricsLens({ lyrics = {}, audioFeatures = {}, songId }) 
   const resolvedThemeNames = new Set(tags.map((t) => t.name.toLowerCase()));
 
   return (
-    <section className="rounded-xl border border-border bg-panel p-5 shadow-soft space-y-3">
+    <div className={panel ? "space-y-3" : "rounded-xl border border-border bg-panel p-5 shadow-soft space-y-3"}>
       {songId && <audio ref={audioRef} src={`/api/audio/${songId}`} preload="metadata" className="hidden" />}
 
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">Lyrics lens</h2>
+          {!panel && <h2 className="text-xs font-semibold uppercase tracking-wider text-muted">Lyrics lens</h2>}
           <div className="flex rounded border border-border p-0.5">
             {["focus", "text"].map((m) => (
               <button
@@ -180,7 +180,7 @@ export default function LyricsLens({ lyrics = {}, audioFeatures = {}, songId }) 
       <p className="text-[11px] text-muted">
         Transcribed from your upload. Only show lyrics for songs you own or that are royalty free. Timestamps are estimated.
       </p>
-    </section>
+    </div>
   );
 }
 

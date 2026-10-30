@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import agent, audio, cities as cities_mod, config, lookup, qloo_client as qloo
+from . import agent, audio, baseline as baseline_mod, chat, cities as cities_mod, config, lookup, qloo_client as qloo, run_store
 
 
 @asynccontextmanager
@@ -38,6 +38,20 @@ ALLOWED_EXT = {".mp3", ".wav", ".m4a"}
 # Hosting hardening: concurrency cap + per-IP rate limit.
 _run_semaphore = asyncio.Semaphore(config.MAX_CONCURRENT_RUNS)
 _ip_requests: dict[str, deque] = defaultdict(deque)
+_chat_semaphore = asyncio.Semaphore(2)
+_chat_requests: dict[str, deque] = defaultdict(deque)
+CHAT_RATE_LIMIT_PER_MINUTE = 10
+
+
+def _chat_rate_limited(ip: str) -> bool:
+    now = time.monotonic()
+    q = _chat_requests[ip]
+    while q and q[0] < now - 60:
+        q.popleft()
+    if len(q) >= CHAT_RATE_LIMIT_PER_MINUTE:
+        return True
+    q.append(now)
+    return False
 
 # Upload magic bytes (lenient per-format signatures).
 _MAGIC = {
@@ -79,6 +93,11 @@ def health():
 @app.get("/api/cities")
 def get_cities():
     return cities_mod.load_cities()
+
+
+@app.get("/api/countries")
+def get_countries():
+    return cities_mod.load_countries()
 
 
 @app.get("/api/artists/search")
@@ -138,18 +157,81 @@ async def run(request: Request):
         if _run_semaphore.locked():
             yield _sse("error", {"message": "server busy, try again shortly"})
             return
+        run_id = uuid.uuid4().hex
         async with _run_semaphore:
-            agent_gen = agent.run_agent(body)
+            q: asyncio.Queue = asyncio.Queue()
+
+            async def produce():
+                try:
+                    async for item in agent.run_agent(body):
+                        await q.put(item)
+                except Exception as e:  # noqa: BLE001
+                    await q.put({"type": "error", "message": str(e)})
+                finally:
+                    await q.put(None)
+
+            producer = asyncio.create_task(produce())
             try:
                 while True:
                     try:
-                        item = await asyncio.wait_for(anext(agent_gen), timeout=15)
-                    except StopAsyncIteration:
-                        break
+                        item = await asyncio.wait_for(q.get(), timeout=15)
                     except asyncio.TimeoutError:
                         yield ": ping\n\n"
                         continue
-                    yield _sse(item["type"], item.get("event") or item.get("result") or item.get("summary"))
+                    if item is None:
+                        break
+                    if item.get("type") == "final":
+                        result = item.get("result") or {}
+                        result["run_id"] = run_id
+                        run_store.put(run_id, result, run_store.jsonable(item.get("state") or {}))
+                        yield _sse("final", result)
+                    elif item.get("type") == "start":
+                        yield _sse("start", {"summary": item.get("summary"), "run_id": run_id})
+                    elif item.get("type") == "error":
+                        yield _sse("error", {"message": item.get("message")})
+                    else:
+                        yield _sse(item["type"], item.get("event") or item.get("result") or item.get("summary"))
+            finally:
+                if not producer.done():
+                    producer.cancel()
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+@app.post("/api/baseline")
+async def baseline_endpoint(request: Request):
+    if _rate_limited(_client_ip(request)):
+        raise HTTPException(429, "rate limit exceeded")
+    body = await request.json()
+    if not (body.get("artist") or "").strip():
+        raise HTTPException(400, "artist is required")
+    return await asyncio.to_thread(baseline_mod.run_baseline, body)
+
+
+@app.post("/api/chat")
+async def chat_endpoint(request: Request):
+    if _chat_rate_limited(_client_ip(request)):
+        raise HTTPException(429, "too many questions, try again in a minute")
+    body = await request.json()
+    run_id = body.get("run_id")
+    message = (body.get("message") or "").strip()
+    if not run_id:
+        raise HTTPException(400, "run_id is required")
+    if not message and not body.get("context"):
+        raise HTTPException(400, "message is required")
+
+    async def gen():
+        if _chat_semaphore.locked():
+            yield _sse("error", {"message": "chat busy, try again shortly"})
+            return
+        async with _chat_semaphore:
+            chat_gen = chat.run_chat(body)
+            try:
+                async for item in chat_gen:
+                    if item["type"] == "error":
+                        yield _sse("error", {"message": item["message"]})
+                    else:
+                        yield _sse(item["type"], item)
             except Exception as e:  # noqa: BLE001
                 yield _sse("error", {"message": str(e)})
 
@@ -200,10 +282,7 @@ async def city_score(request: Request, artist_id: str = "", city: str = ""):
     if hm["ok"] and hm["aggregate"]:
         agg = hm["aggregate"]
         score = round(agg["mean_affinity_rank"] * 100, 1)
-        reason = (
-            f"Artist overperforms geographically across {agg['points']} grid points "
-            f"(mean affinity_rank {agg['mean_affinity_rank']:.2f})."
-        )
+        reason = "Fans of this artist over-index here relative to the average audience."
         return {"city": city, "score": score, "reason": reason, "status": "scored"}
     reason = f"No geographic affinity data for {city}." + (f" ({hm['error']})" if hm.get("error") else "")
     return {"city": city, "score": None, "reason": reason, "status": "no_data"}

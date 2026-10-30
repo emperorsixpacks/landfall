@@ -43,6 +43,39 @@ def _extract_json(text: str) -> Optional[dict]:
     return None
 
 
+def chat_stream(messages: list[dict], temperature: float = 0.0):
+    """Yield content deltas from an OpenAI-compatible chat completions stream.
+
+    Returns an empty iterator (rather than raising) when the LLM is not
+    configured, so callers can fall back to a canned answer.
+    """
+    if not config.llm_ready():
+        return
+    url = f"{config.LLM_BASE_URL}/chat/completions"
+    body: dict[str, Any] = {
+        "model": config.LLM_MODEL,
+        "messages": messages,
+        "temperature": temperature,
+        "stream": True,
+    }
+    headers = {"Authorization": f"Bearer {config.LLM_API_KEY}", "Content-Type": "application/json"}
+    with httpx.stream("POST", url, json=body, headers=headers, timeout=config.TOOL_TIMEOUT_SECONDS) as r:
+        r.raise_for_status()
+        for line in r.iter_lines():
+            if not line or not line.startswith("data:"):
+                continue
+            payload = line[5:].strip()
+            if payload == "[DONE]":
+                break
+            try:
+                d = json.loads(payload)
+                delta = d["choices"][0]["delta"].get("content")
+                if delta:
+                    yield delta
+            except (json.JSONDecodeError, KeyError, IndexError, TypeError):
+                continue
+
+
 def chat_json(
     messages: list[dict],
     temperature: float = 0.0,

@@ -92,6 +92,26 @@ def get_artist(artist_id: str) -> dict | None:
     }
 
 
+def get_related_artists(artist_id: str, limit: int = 10) -> list[dict]:
+    """Spotify's own related-artists list — an independent signal from Qloo and YT."""
+    d = _get(f"/artists/{artist_id}/related-artists")
+    if not d:
+        return []
+    out = []
+    for a in (d.get("artists") or [])[:limit]:
+        if not a.get("name"):
+            continue
+        imgs = a.get("images") or []
+        out.append({
+            "name": a["name"],
+            "id": a.get("id"),
+            "genres": a.get("genres") or [],
+            "popularity": a.get("popularity"),
+            "image": imgs[0].get("url") if imgs else None,
+        })
+    return out
+
+
 def get_albums(artist_id: str, limit: int = 8) -> list[dict]:
     d = _get(f"/artists/{artist_id}/albums", {"include_groups": "album,single", "limit": limit})
     if not d:
@@ -140,19 +160,23 @@ def find_artist(query: str) -> dict | None:
     top = cands[0]
     name = top.get("name")
     # Parallelize the three follow-up calls to keep the lookup fast.
-    with ThreadPoolExecutor(max_workers=3) as ex:
+    with ThreadPoolExecutor(max_workers=4) as ex:
         f_info = ex.submit(get_artist, top["id"])
         f_albums = ex.submit(get_albums, top["id"])
         f_tracks = ex.submit(search_tracks, name)
+        f_related = ex.submit(get_related_artists, top["id"])
         info = f_info.result() or {}
         albums = f_albums.result() or []
         tracks = f_tracks.result() or []
+        related = f_related.result() or []
     return {
         "name": info.get("name") or name,
         "id": top.get("id"),
         "genres": info.get("genres", []),
+        "popularity": info.get("popularity"),
         "image": info.get("image"),
         "albums": albums,
         "spotify_top_songs": tracks,
+        "spotify_related": related,
         "source": "Spotify",
     }

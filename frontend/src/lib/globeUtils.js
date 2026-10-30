@@ -7,8 +7,8 @@ export const COLORS = {
   high: "#4CC38A", // positive (high scores)
   top: "#4CC38A", // positive (top 3)
   noData: "#5A616D",
-  land: "#2E3642", // land — brighter than base for visibility
-  base: "#0E0F12", // ocean/base — dark
+  land: "#3A4350", // land — lighter than the sphere for contrast
+  base: "#10151D", // ocean/base — dark sphere
   arc: "#5B9DFF",
   atmosphere: "#5B9DFF",
 };

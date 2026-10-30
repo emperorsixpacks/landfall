@@ -1,6 +1,6 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import Globe from "react-globe.gl";
-import { MeshPhongMaterial } from "three";
+import { MeshLambertMaterial } from "three";
 import { feature } from "topojson-client";
 import countries from "world-atlas/countries-110m.json";
 import {
@@ -14,6 +14,13 @@ import {
 const LAND = sanitizeLandFeatures(
   feature(countries, countries.objects.countries).features
 );
+
+// world-atlas name -> our country name (a few naming differences).
+const WA_TO_MINE = {
+  "dem. rep. congo": "dr congo",
+  "united states of america": "united states",
+};
+const NO_DATA_COLOR = "#262E38";
 
 // forwardRef exposes: flyToCity(m), resetView(), saveImage(), startTour()
 const LandfallGlobe = forwardRef(function LandfallGlobe(
@@ -35,16 +42,10 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
 ) {
   const globeEl = useRef(null);
   const wrapRef = useRef(null);
-  const dimsState = useState({ width: 800, height: Math.max(height, 420) });
+  const dimsState = useState({ width: 800, height: Math.max(height, 480) });
   const [dims, setDims] = dimsState;
   const globeMaterial = useMemo(
-    () => new MeshPhongMaterial({ 
-      color: COLORS.base,
-      emissive: "#FFFFFF",
-      emissiveIntensity: 0.05,
-      shininess: 15,
-      specular: "#E2E8F0",
-    }),
+    () => new MeshLambertMaterial({ color: COLORS.base }),
     []
   );
 
@@ -54,7 +55,7 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
     if (!el || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver((entries) => {
       const r = entries[0]?.contentRect;
-      if (r) setDims({ width: r.width, height: Math.max(r.height, 420) });
+      if (r) setDims({ width: r.width, height: Math.max(r.height, 480) });
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -63,6 +64,35 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
   const ranked = rankMarkets(markets);
   const top3 = ranked.filter((m) => m.status !== "no_data" && m.score != null).slice(0, 3);
   const top5 = ranked.filter((m) => m.status !== "no_data" && m.score != null).slice(0, 5);
+
+  const fitView = useMemo(() => {
+    const pts = ranked.filter((m) => m.status !== "no_data" && m.lat != null);
+    if (!pts.length) return { lat: 15, lng: 0, altitude: 2.5 };
+    const lat = pts.reduce((s, m) => s + m.lat, 0) / pts.length;
+    const lng = pts.reduce((s, m) => s + m.lng, 0) / pts.length;
+    return { lat, lng, altitude: 1.6 };
+  }, [ranked]);
+
+  // Country name (ours) -> market, for the choropleth fill + interaction.
+  const nameToScore = useMemo(() => {
+    const map = new Map();
+    for (const m of ranked) {
+      if (m.score != null) map.set((m.city || "").toLowerCase().trim(), m);
+    }
+    return map;
+  }, [ranked]);
+
+  const featureToMarket = (f) => {
+    const wa = (f?.properties?.name || "").toLowerCase().trim();
+    const key = WA_TO_MINE[wa] || wa;
+    return nameToScore.get(key) || null;
+  };
+
+  const polygonColor = (f) => {
+    if (!showMarkets) return COLORS.land;
+    const m = featureToMarket(f);
+    return m ? scoreToColor(m.score, m.rank) : NO_DATA_COLOR;
+  };
 
   const reduced = prefersReducedMotion();
 
@@ -101,7 +131,7 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
         g.pointOfView({ lat: m.lat, lng: m.lng, altitude: 1.2 }, 1200);
         await new Promise((r) => setTimeout(r, 2500));
       }
-      if (!cancelled) g.pointOfView({ lat: 15, lng: 0, altitude: 2.5 }, 1200);
+      if (!cancelled) g.pointOfView(fitView, 1200);
     };
     tour();
     return () => {
@@ -120,7 +150,7 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
     },
     resetView() {
       const g = globeEl.current;
-      if (g) g.pointOfView({ lat: 15, lng: 0, altitude: 2.5 }, 800);
+      if (g) g.pointOfView(fitView, 800);
     },
     saveImage() {
       const g = globeEl.current;
@@ -130,13 +160,9 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
     startTour() {
       const g = globeEl.current;
       if (!g) return;
-      g.pointOfView({ lat: 15, lng: 0, altitude: 2.5 }, 1000);
+      g.pointOfView(fitView, 1000);
     },
   }));
-
-  const scoredPoints = showMarkets
-    ? ranked.map((m) => ({ ...m, isNoData: m.status === "no_data" || m.score == null }))
-    : [];
 
   const arcsData =
     showArcs && origin && top5.length
@@ -155,19 +181,13 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
       || allCities.find((c) => c.city === selectedCity);
     if (m && m.lat != null) ringsData.push({ ...m, isSelected: true });
   }
-  // No-data markets render as small hollow gray rings.
-  if (showMarkets) {
-    for (const m of ranked) {
-      if (m.status === "no_data" && m.lat != null) ringsData.push({ ...m, isSelected: false });
-    }
-  }
 
   const venues = showVenues
     ? ranked.flatMap((m) => (m.venues || []).map((v) => ({ ...v, market: m.city })))
     : [];
 
   return (
-    <div ref={wrapRef} className="h-full w-full" style={{ minHeight: 420 }}>
+    <div ref={wrapRef} className="h-full w-full" style={{ minHeight: 480 }}>
       <Globe
         ref={globeEl}
         width={dims.width}
@@ -176,32 +196,22 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
         globeMaterial={globeMaterial}
         atmosphereColor={COLORS.atmosphere}
         atmosphereAltitude={0.12}
-        hexPolygonsData={LAND}
-        hexPolygonResolution={3}
-        hexPolygonMargin={0.68}
-        hexPolygonColor={() => COLORS.land}
-        hexPolygonAltitude={0.003}
         polygonsData={LAND}
-        polygonCapColor={() => "rgba(0,0,0,0)"}
-        polygonSideColor={() => "rgba(0,0,0,0)"}
-        polygonStrokeColor={() => "#4A5568"}
-        polygonAltitude={0.01}
+        polygonCapColor={polygonColor}
+        polygonSideColor={() => "#151A20"}
+        polygonStrokeColor={() => "#0E1216"}
+        polygonAltitude={0.012}
         polygonCapCurvatureResolution={2}
-        pointsData={scoredPoints}
-        pointLat={(d) => d.lat}
-        pointLng={(d) => d.lng}
-        pointAltitude={(d) => (d.isNoData ? 0.004 : 0.006 + (d.score ?? 0) / 100 * 0.08)}
-        pointRadius={(d) => (d.isNoData ? 0.12 : 0.25 + (d.score ?? 0) / 100 * 0.8)}
-        pointColor={(d) => (d.isNoData ? COLORS.noData : scoreToColor(d.score, d.rank))}
-        pointLabel={(d) => {
-          if (d.isNoData) {
-            return `<div class="globe-tip"><b>${d.city}</b><span>no Qloo data</span></div>`;
-          }
-          return `<div class="globe-tip"><b>${d.city}</b><span class="num">${d.score}</span><small>${d.reason}</small></div>`;
+        polygonLabel={(f) => {
+          const m = featureToMarket(f);
+          if (!m) return `<div class="globe-tip"><b>${f?.properties?.name || ""}</b><span>no data</span></div>`;
+          return `<div class="globe-tip"><b>${m.city}</b><span class="num">${m.score}</span><small>${m.reason || ""}</small></div>`;
         }}
-        onPointHover={(d) => onHover && onHover(d ? d.city : null)}
-        onPointClick={(d) => {
-          if (d && onSelect) onSelect(d.city);
+        onPolygonHover={(f) => onHover && onHover(f ? (featureToMarket(f)?.city || null) : null)}
+        onPolygonClick={(f) => {
+          if (!f) return;
+          const m = featureToMarket(f);
+          if (m && onSelect) onSelect(m.city);
         }}
         arcsData={arcsData}
         arcColor={(d) => scoreToColor(d.score)}
@@ -228,7 +238,6 @@ const LandfallGlobe = forwardRef(function LandfallGlobe(
         ringMaxRadius={(d) => (d.isSelected ? 3.8 : 2.4)}
         ringPropagationSpeed={(d) => (d.isSelected ? 1.5 : 0.6)}
         ringRepeatPeriod={d => (d.isSelected ? 900 : 2400)}
-        pointsMerge
       />
     </div>
   );

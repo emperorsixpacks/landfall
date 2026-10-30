@@ -1,0 +1,308 @@
+[
+  {
+    "city": "Nigeria",
+    "country": "Nigeria",
+    "lat": 6.6835,
+    "lng": 5.8605
+  },
+  {
+    "city": "Ghana",
+    "country": "Ghana",
+    "lat": 5.6037,
+    "lng": -0.187
+  },
+  {
+    "city": "South Africa",
+    "country": "South Africa",
+    "lat": -30.0645,
+    "lng": 23.2357
+  },
+  {
+    "city": "Kenya",
+    "country": "Kenya",
+    "lat": -1.2921,
+    "lng": 36.8219
+  },
+  {
+    "city": "Ethiopia",
+    "country": "Ethiopia",
+    "lat": 9.0245,
+    "lng": 38.746
+  },
+  {
+    "city": "Egypt",
+    "country": "Egypt",
+    "lat": 30.0444,
+    "lng": 31.2357
+  },
+  {
+    "city": "Senegal",
+    "country": "Senegal",
+    "lat": 14.7167,
+    "lng": -17.4677
+  },
+  {
+    "city": "Tanzania",
+    "country": "Tanzania",
+    "lat": -6.7924,
+    "lng": 39.2083
+  },
+  {
+    "city": "Uganda",
+    "country": "Uganda",
+    "lat": 0.3476,
+    "lng": 32.5825
+  },
+  {
+    "city": "Rwanda",
+    "country": "Rwanda",
+    "lat": -1.9441,
+    "lng": 30.0619
+  },
+  {
+    "city": "Morocco",
+    "country": "Morocco",
+    "lat": 32.6013,
+    "lng": -7.7854
+  },
+  {
+    "city": "DR Congo",
+    "country": "DR Congo",
+    "lat": -4.4419,
+    "lng": 15.2663
+  },
+  {
+    "city": "Côte d'Ivoire",
+    "country": "Côte d'Ivoire",
+    "lat": 5.36,
+    "lng": -4.0083
+  },
+  {
+    "city": "Cameroon",
+    "country": "Cameroon",
+    "lat": 4.0511,
+    "lng": 9.7679
+  },
+  {
+    "city": "United Kingdom",
+    "country": "United Kingdom",
+    "lat": 53.6472,
+    "lng": -1.8529
+  },
+  {
+    "city": "France",
+    "country": "France",
+    "lat": 48.8566,
+    "lng": 2.3522
+  },
+  {
+    "city": "Germany",
+    "country": "Germany",
+    "lat": 51.0793,
+    "lng": 10.9157
+  },
+  {
+    "city": "Netherlands",
+    "country": "Netherlands",
+    "lat": 52.146,
+    "lng": 4.6909
+  },
+  {
+    "city": "Spain",
+    "country": "Spain",
+    "lat": 40.9021,
+    "lng": -0.7676
+  },
+  {
+    "city": "Italy",
+    "country": "Italy",
+    "lat": 43.6835,
+    "lng": 10.8432
+  },
+  {
+    "city": "Sweden",
+    "country": "Sweden",
+    "lat": 59.3293,
+    "lng": 18.0686
+  },
+  {
+    "city": "Portugal",
+    "country": "Portugal",
+    "lat": 38.7223,
+    "lng": -9.1393
+  },
+  {
+    "city": "Ireland",
+    "country": "Ireland",
+    "lat": 53.3498,
+    "lng": -6.2603
+  },
+  {
+    "city": "Poland",
+    "country": "Poland",
+    "lat": 52.2297,
+    "lng": 21.0122
+  },
+  {
+    "city": "Switzerland",
+    "country": "Switzerland",
+    "lat": 46.7906,
+    "lng": 7.3425
+  },
+  {
+    "city": "Norway",
+    "country": "Norway",
+    "lat": 59.9139,
+    "lng": 10.7522
+  },
+  {
+    "city": "Denmark",
+    "country": "Denmark",
+    "lat": 55.6761,
+    "lng": 12.5683
+  },
+  {
+    "city": "Belgium",
+    "country": "Belgium",
+    "lat": 50.8503,
+    "lng": 4.3517
+  },
+  {
+    "city": "United States",
+    "country": "United States",
+    "lat": 36.1684,
+    "lng": -95.0799
+  },
+  {
+    "city": "Canada",
+    "country": "Canada",
+    "lat": 46.1459,
+    "lng": -92.0238
+  },
+  {
+    "city": "Mexico",
+    "country": "Mexico",
+    "lat": 21.9263,
+    "lng": -100.933
+  },
+  {
+    "city": "Brazil",
+    "country": "Brazil",
+    "lat": -21.0527,
+    "lng": -45.4817
+  },
+  {
+    "city": "Argentina",
+    "country": "Argentina",
+    "lat": -33.0119,
+    "lng": -61.2852
+  },
+  {
+    "city": "Colombia",
+    "country": "Colombia",
+    "lat": 5.4776,
+    "lng": -74.8267
+  },
+  {
+    "city": "Chile",
+    "country": "Chile",
+    "lat": -33.4489,
+    "lng": -70.6693
+  },
+  {
+    "city": "Peru",
+    "country": "Peru",
+    "lat": -12.0464,
+    "lng": -77.0428
+  },
+  {
+    "city": "Japan",
+    "country": "Japan",
+    "lat": 35.185,
+    "lng": 137.5763
+  },
+  {
+    "city": "India",
+    "country": "India",
+    "lat": 18.9503,
+    "lng": 79.1338
+  },
+  {
+    "city": "South Korea",
+    "country": "South Korea",
+    "lat": 37.5665,
+    "lng": 126.978
+  },
+  {
+    "city": "Philippines",
+    "country": "Philippines",
+    "lat": 14.5995,
+    "lng": 120.9842
+  },
+  {
+    "city": "Indonesia",
+    "country": "Indonesia",
+    "lat": -6.2088,
+    "lng": 106.8456
+  },
+  {
+    "city": "Singapore",
+    "country": "Singapore",
+    "lat": 1.3521,
+    "lng": 103.8198
+  },
+  {
+    "city": "Thailand",
+    "country": "Thailand",
+    "lat": 13.7563,
+    "lng": 100.5018
+  },
+  {
+    "city": "Vietnam",
+    "country": "Vietnam",
+    "lat": 10.8231,
+    "lng": 106.6297
+  },
+  {
+    "city": "Malaysia",
+    "country": "Malaysia",
+    "lat": 3.139,
+    "lng": 101.6869
+  },
+  {
+    "city": "United Arab Emirates",
+    "country": "United Arab Emirates",
+    "lat": 24.8293,
+    "lng": 54.824
+  },
+  {
+    "city": "Saudi Arabia",
+    "country": "Saudi Arabia",
+    "lat": 23.0997,
+    "lng": 42.9339
+  },
+  {
+    "city": "Qatar",
+    "country": "Qatar",
+    "lat": 25.2854,
+    "lng": 51.531
+  },
+  {
+    "city": "Israel",
+    "country": "Israel",
+    "lat": 32.0853,
+    "lng": 34.7818
+  },
+  {
+    "city": "Australia",
+    "country": "Australia",
+    "lat": -32.7757,
+    "lng": 141.2645
+  },
+  {
+    "city": "New Zealand",
+    "country": "New Zealand",
+    "lat": -36.8509,
+    "lng": 174.7645
+  }
+]
