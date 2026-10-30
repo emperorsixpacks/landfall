@@ -194,13 +194,12 @@ logged.
 
 ## Deploy
 
-Deploys as one Dockerized service (backend + built frontend + ffmpeg) on Render or Fly.
+Deploys as one Dockerized service (backend + built frontend + ffmpeg) on Railway.
 
-- Render: `render.yaml` (blueprint) is provided, or push and set
-  `Dockerfile` as the build.
-- Fly: `fly launch` (uses the same `Dockerfile`).
+- Railway: `railway.json` (Dockerfile builder) is provided. Set env vars from
+  `.env.example` and deploy the repo root.
 
-Live demo link: _(add after deploy)_
+Live demo: [https://landfall-prod.up.railway.app/](https://landfall-prod.up.railway.app/)
 
 ## License
 
