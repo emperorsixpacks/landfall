@@ -35,8 +35,9 @@ SYSTEM_PROMPT = (
     "of the song. Do not answer lyric questions with themes alone when lines are "
     "available. When asked about a specific market or country, call explain_market "
     "with that country name rather than relying on the whole market list. "
-    "Be brief: 1 to 4 short paragraphs, plain language, no em dashes. "
-    "Offer at most one follow-up."
+    "Weave the numbers and the Wikipedia context into natural, human prose; do not "
+    "just list figures. Be brief: 1 to 4 short paragraphs, plain language, no em "
+    "dashes. Offer at most one follow-up."
 )
 
 TOOL_LABELS = {
@@ -218,30 +219,30 @@ def _explain_market(args, ctx):
     if m.get("score") is None:
         return f"{m['country']}: {m.get('reason') or 'no Qloo data'} (no score).", [{"kind": "qloo", "label": m["country"], "ref": f"section:markets"}]
     rank = _rank(ctx, m["country"])
+    scored = [x for x in (ctx["result"].get("markets") or []) if x.get("score") is not None]
+    total = len(scored)
     med = _median_scores(ctx)
     delta = round(m["score"] - med, 1) if med is not None else None
+    top = scored[0] if scored else None
 
-    qfacts = []
+    facts = []
     if m.get("points") is not None:
-        qfacts.append(f"{m['points']} sampled locations")
-    if m.get("affinity_rank") is not None:
-        qfacts.append(f"mean affinity rank {m['affinity_rank']:.2f}")
+        facts.append(f"{m['points']} sampled locations")
     if m.get("affinity") is not None:
-        qfacts.append(f"mean affinity {m['affinity']:.2f}")
+        facts.append(f"mean affinity {m['affinity']:.2f}")
     if m.get("popularity") is not None:
-        qfacts.append(f"mean popularity {m['popularity']:.2f}")
-    qstr = ("Qloo data: " + ", ".join(qfacts) + ". ") if qfacts else ""
+        facts.append(f"mean popularity {m['popularity']:.2f}")
+    qstr = ("Qloo: " + ", ".join(facts) + ". ") if facts else ""
 
     wik = wiki.fetch_country_info(m["country"])
     wstr = ""
-    if wik:
-        snippet = wik.get("description") or wik.get("extract")
-        if snippet:
-            wstr = f"Wikipedia: {snippet}. "
+    if wik and wik.get("summary"):
+        wstr = f"Context: {wik['summary']} "
 
     text = (
-        f"{m['country']} scores {m['score']}, ranked #{rank}. "
-        + (f"Median is {med}; it is {delta:+} vs the median. " if delta is not None else "")
+        f"{m['country']} ranks #{rank} of {total} with a score of {m['score']}. "
+        + (f"It is {delta:+} vs the median of {med}. " if delta is not None else "")
+        + (f"Top market is {top['country']} at {top['score']}. " if top and top['country'] != m['country'] else "")
         + qstr + wstr
         + f"{m.get('reason') or ''}"
     )
