@@ -85,7 +85,7 @@ def _analyze_file(src: Path) -> dict:
         tempo, beats = _tempo(y, sr, librosa)
         key, mode, key_conf = _key(y, sr, librosa, np)
         energy = _energy_curve(y, sr, librosa, np)
-        loudness = _loudness(src)
+        loudness = _loudness(y, sr)
         brightness = _brightness(y, sr, librosa)
         onset_density, novelty = _onset(y, sr, librosa, np)
         sections = _sections(y, sr, beats, duration, librosa, np)
@@ -126,7 +126,7 @@ def _tempo(y, sr, librosa):
 
 
 def _key(y, sr, librosa, np):
-    chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
+    chroma = librosa.feature.chroma_stft(y=y, sr=sr)
     chroma_mean = chroma.mean(axis=1)
     best = None
     second = None
@@ -159,11 +159,10 @@ def _energy_curve(y, sr, librosa, np):
     }
 
 
-def _loudness(src: Path) -> Optional[float]:
+def _loudness(y, sr) -> Optional[float]:
     try:
         import pyloudnorm as pyln
 
-        y, sr, _ = _load_audio(src)
         meter = pyln.Meter(sr)
         return round(float(meter.integrated_loudness(y)), 1)
     except Exception:  # noqa: BLE001
@@ -203,7 +202,7 @@ def _onset(y, sr, librosa, np):
 
 def _sections(y, sr, beats, duration, librosa, np):
     try:
-        chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
+        chroma = librosa.feature.chroma_stft(y=y, sr=sr)
         mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=12)
         if len(beats) < 4:
             beats = np.arange(0, chroma.shape[1], 8)
