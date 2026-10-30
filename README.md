@@ -3,10 +3,21 @@
 An agentic release planner for music artists, built for the Qloo Agentic Hackathon.
 
 Pick an artist and drop in a new unreleased song. An agent uses **Qloo taste data**
-to predict how well the song fits the artist's audience, which cities and
+to predict how well the song fits the artist's audience, which countries and
 collaborators to target, and which 15–30 second section to use as the clip. A plain
 LLM cannot do this because it has no audience taste data — Qloo is the core, not a
 garnish.
+
+## Demo track
+
+The bundled sample used in the demo is **"The Best Man I Ever Knew"** by
+**Alicia Branx** (`samples/Alicia Branx - The Best Man I Ever Knew.mp3`).
+
+- **Source:** [Free Music Archive](https://freemusicarchive.org)
+- **License:** [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/) — Attribution-NonCommercial-NoDerivatives
+- **Credit:** "The Best Man I Ever Knew" by Alicia Branx, via Free Music Archive, CC BY-NC-ND 4.0.
+- **Usage:** personal use only. Not for commercial use, and not for derivative
+  works (video, YouTube, Instagram, Facebook, podcast, remixes, etc.).
 
 ## Architecture
 
