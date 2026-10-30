@@ -122,20 +122,6 @@ export default function Home({ config, allCountries = [], onRun, onError, prefil
     setSoundsLike((prev) => prev.filter((n) => n !== name));
   }
 
-  function tryExample() {
-    setResolvedArtist("Tems");
-    setArtistQuery("Tems");
-    setShowArtistDropdown(false);
-    const s = config.sample_tracks?.[0];
-    if (s) { setSongId(s.song_id); setSongName(s.name); } else { setSongId(null); setSongName(null); }
-    setIsSampleTrack(true);
-    setRightsConfirmed(true);
-    const globals = allCountries.map((c) => c.country);
-    setCountries(globals);
-    setActivePreset("Global");
-    onRun({ artist: "Tems", song_id: s ? s.song_id : null, song_name: s ? s.name : null, countries: globals, sounds_like: [], genres: [] });
-  }
-
   function selectArtist(name) {
     setResolvedArtist(name);
     setArtistQuery(name);
@@ -262,9 +248,6 @@ export default function Home({ config, allCountries = [], onRun, onError, prefil
         <div className="self-start desktop:sticky desktop:top-24">
           <Hero reduced={reduced} />
           <div className="mt-8 flex items-center gap-3">
-            <button onClick={tryExample} className="rounded-control bg-accent px-5 py-2.5 text-body font-semibold text-black hover:brightness-110">
-              Run an example
-            </button>
             <button onClick={() => artistInputRef.current?.focus()} className="rounded-control border border-border px-5 py-2.5 text-body text-text hover:border-accent">
               Plan mine
             </button>
