@@ -128,6 +128,18 @@ export default function Home({ config, allCountries = [], onRun, onError, prefil
     setShowArtistDropdown(false);
   }
 
+  function loadExample() {
+    setResolvedArtist("Tems");
+    setArtistQuery("Tems");
+    setShowArtistDropdown(false);
+    const s = config.sample_tracks?.[0];
+    if (s) { setSongId(s.song_id); setSongName(s.name); }
+    setIsSampleTrack(true);
+    setRightsConfirmed(true);
+    setCountries(allCountries.map((c) => c.country));
+    setActivePreset("Global");
+  }
+
   function changeArtist() {
     setResolvedArtist(null);
     setArtistQuery("");
@@ -248,6 +260,9 @@ export default function Home({ config, allCountries = [], onRun, onError, prefil
         <div className="self-start desktop:sticky desktop:top-24">
           <Hero reduced={reduced} />
           <div className="mt-8 flex items-center gap-3">
+            <button onClick={loadExample} className="rounded-control bg-accent px-5 py-2.5 text-body font-semibold text-black hover:brightness-110">
+              Try a demo
+            </button>
             <button onClick={() => artistInputRef.current?.focus()} className="rounded-control border border-border px-5 py-2.5 text-body text-text hover:border-accent">
               Plan mine
             </button>
