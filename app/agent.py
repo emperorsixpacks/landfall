@@ -554,11 +554,11 @@ def _market_from_heatmap(country, hm) -> dict:
         if aff is None:
             reason = "No clear affinity signal."
         elif aff >= 0.6:
-            reason = "Fans of this artist over-index here strongly."
+            reason = "Fans are strongly concentrated here."
         elif aff >= 0.4:
-            reason = "Fans of this artist over-index here moderately."
+            reason = "Fans are moderately concentrated here."
         else:
-            reason = "Fans of this artist are less concentrated here."
+            reason = "Fans are less concentrated here than elsewhere."
         return {
             "country": country,
             "score": score,

@@ -35,9 +35,12 @@ SYSTEM_PROMPT = (
     "of the song. Do not answer lyric questions with themes alone when lines are "
     "available. When asked about a specific market or country, call explain_market "
     "with that country name rather than relying on the whole market list. "
-    "Weave the numbers and the Wikipedia context into natural, human prose; do not "
-    "just list figures. Be brief: 1 to 4 short paragraphs, plain language, no em "
-    "dashes. Offer at most one follow-up."
+    "Write like a knowledgeable music-industry analyst talking to the artist, in "
+    "plain conversational English. Translate jargon (\"over-index\", \"affinity rank\", "
+    "\"sampled locations\") into plain language. Always use the Wikipedia context "
+    "(population, region, culture) to explain why a market ranks where it does, and "
+    "weave the Qloo numbers in rather than listing them. 1 to 3 short paragraphs, "
+    "no em dashes. Offer at most one follow-up."
 )
 
 TOOL_LABELS = {
