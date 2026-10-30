@@ -36,12 +36,13 @@ SYSTEM_PROMPT = (
     "available. When asked about a specific market or country, call explain_market "
     "with that country name rather than relying on the whole market list. "
     "Write like a knowledgeable music-industry analyst talking to the artist, in "
-    "plain conversational English. Answer the WHY, not just the numbers: explain "
-    "the cause and effect (for example, a huge population dilutes how concentrated "
-    "the fans are), drawing on the affinity and the Wikipedia context (population, "
-    "region, culture). Translate jargon (\"over-index\", \"affinity rank\") into plain "
-    "language and never list bare figures. 1 to 3 short paragraphs, no em dashes. "
-    "Offer at most one follow-up."
+    "plain conversational English. Frame it around whether the artist's song is "
+    "likely to land well in that market. Answer the WHY, not just the numbers: "
+    "explain the cause and effect (for example, a huge population dilutes how "
+    "concentrated the fans are), drawing on the affinity and the short Wikipedia "
+    "context (region, population). Translate jargon (\"over-index\", \"affinity rank\") "
+    "into plain language and never list bare figures. 1 to 3 short paragraphs, "
+    "no em dashes. Offer at most one follow-up."
 )
 
 TOOL_LABELS = {
@@ -232,7 +233,11 @@ def _explain_market(args, ctx):
     pop = m.get("popularity")
 
     wik = wiki.fetch_country_info(m["country"])
-    wik_sum = (wik or {}).get("summary", "")
+    wline = ""
+    if wik and (wik.get("description") or wik.get("population")):
+        desc = wik.get("description") or ""
+        wiki_pop = wik.get("population")
+        wline = f"{desc}" + (f" (about {wiki_pop} people)" if wiki_pop else "") + ". "
 
     # Narrative "why", not a number dump.
     sentences = [f"{m['country']} ranks #{rank} of {total}."]
@@ -250,8 +255,8 @@ def _explain_market(args, ctx):
         sentences.append(f"The reason is that {why} (affinity {aff:.2f}{extra}).")
     if top and top["country"] != m["country"]:
         sentences.append(f"For comparison, the top market {top['country']} scores {top['score']}.")
-    if wik_sum:
-        sentences.append(wik_sum)
+    if wline:
+        sentences.append(wline.strip())
     ref = next((f"step:{s.get('step')}" for s in (ctx["result"].get("trace") or []) if s.get("tool") == "score_market" and (s.get("args_summary") or "").lower() == m["country"].lower()), f"section:markets")
     return " ".join(sentences), [{"kind": "qloo", "label": m["country"], "ref": ref}]
 

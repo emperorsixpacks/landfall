@@ -30,12 +30,12 @@ class TestMentionedMarket(unittest.TestCase):
 
 class TestExplainMarket(unittest.TestCase):
     def test_grounded_rank_score_and_wikipedia(self):
-        with mock.patch.object(chat.wiki, "fetch_country_info", return_value={"summary": "Nigeria is a country in West Africa with 242 million people."}):
+        with mock.patch.object(chat.wiki, "fetch_country_info", return_value={"description": "Country in West Africa", "population": "242 million"}):
             text, _ = chat._explain_market({"country": "Nigeria"}, {"result": _result(), "state": {}, "run_id": "x"})
         self.assertIn("Nigeria", text)
         self.assertIn("41.7", text)
         self.assertIn("United States", text)  # top-market comparison
-        self.assertIn("242 million", text)  # wikipedia context woven in
+        self.assertIn("242 million", text)  # wikipedia population woven in
 
     def test_unknown_market_is_refused(self):
         text, _ = chat._explain_market({"country": "Atlantis"}, {"result": _result(), "state": {}, "run_id": "x"})
